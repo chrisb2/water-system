@@ -9,17 +9,14 @@ _THINGSPEAK_URL = ('https://api.thingspeak.com/update?api_key={}'
                    '&field1={}&field2={}')
 _WEATHER_URL = \
     "http://api.wunderground.com/api/{}/conditions/q{}.json"
-_READING_DELAY_MS = 5 * 60 * 1000  # 5 Minutes
 
 
 def run():
     """Main entry point to execute this program."""
-    ntptime.settime()
     rain_last_hour_mm, rain_today_mm = _read_from_wunderground()
     _send_to_thingspeak(rain_last_hour_mm, rain_today_mm)
-    print("Last hour %dmm, Today %dmm" % (rain_last_hour_mm, rain_today_mm))
-    print(utime.localtime())
-    machine.deepsleep(sleep_ms=_READING_DELAY_MS)
+    print("Last hour %dmm, today %dmm" % (rain_last_hour_mm, rain_today_mm))
+    machine.deepsleep(_sleep_ms())
 
 
 def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm):
@@ -38,3 +35,17 @@ def _read_from_wunderground():
     rain_last_hour_mm = int(observation['precip_1hr_metric'])
     rain_today_mm = int(observation['precip_today_metric'])
     return rain_last_hour_mm, rain_today_mm
+
+
+def _sleep_ms():
+    ntptime.settime()
+
+    current_secs = utime.time()
+    current_time = list(utime.localtime(current_secs))
+    # current_time[2] = current_time[2] + 1  # increment day
+    current_time[3] = current_time[3] + 1  # increment hour
+    current_time[4] = 0  # Set minutes to zero
+    current_time[5] = 0  # Set seconds to zero
+
+    next_secs = utime.mktime(tuple(current_time))
+    return (next_secs - current_secs) * 1000
