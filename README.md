@@ -1,4 +1,4 @@
-# Garden Watering System Controller on Lolin32 Lite
+# Garden Watering System Controller
 
 This [MicroPython](http://micropython.org/) project on an [ESP32](https://en.wikipedia.org/wiki/ESP32) uses
 [Wunderground](https://www.wunderground.com) to determine if

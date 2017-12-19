@@ -1,6 +1,7 @@
 """Monitor local rainfall and disable garden watering system if required."""
 import urequests
 import machine
+import esp32
 import ntptime
 import utime
 import secrets
@@ -13,10 +14,17 @@ _WEATHER_URL = \
 
 def run():
     """Main entry point to execute this program."""
+    _initializePinInterrupt()
     rain_last_hour_mm, rain_today_mm = _read_from_wunderground()
     _send_to_thingspeak(rain_last_hour_mm, rain_today_mm)
     print("Last hour %dmm, today %dmm" % (rain_last_hour_mm, rain_today_mm))
-    machine.deepsleep(_sleep_ms())
+    machine.deepsleep()
+
+
+def _initializePinInterrupt():
+    pin = machine.Pin(4)
+    pin.init(pin.IN, pin.PULL_UP)
+    esp32.wake_on_ext0(pin, 0)
 
 
 def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm):
