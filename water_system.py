@@ -2,29 +2,50 @@
 import urequests
 import machine
 import esp32
-import ntptime
-import utime
+import urtc
 import secrets
+
+INTERRUPT_PIN = machine.Pin(4)
+SCL_PIN = machine.Pin(17)
+SDA_PIN = machine.Pin(5)
 
 _THINGSPEAK_URL = ('https://api.thingspeak.com/update?api_key={}'
                    '&field1={}&field2={}')
 _WEATHER_URL = \
-    "http://api.wunderground.com/api/{}/conditions/q{}.json"
+    'http://api.wunderground.com/api/{}/conditions/q{}.json'
+
+# 5AM GMT
+RTC_ALARM = urtc.datetime_tuple(None, None, None, None, 5, 0, None, None)
 
 
 def run():
     """Main entry point to execute this program."""
-    _initializePinInterrupt()
     rain_last_hour_mm, rain_today_mm = _read_from_wunderground()
     _send_to_thingspeak(rain_last_hour_mm, rain_today_mm)
     print("Last hour %dmm, today %dmm" % (rain_last_hour_mm, rain_today_mm))
+
+    _sleep_until(RTC_ALARM)
+
+
+def _sleep_until(alarm_time):
+    _configure_pin_interrupt()
+    _configure_rtc_alarm(alarm_time)
     machine.deepsleep()
 
 
-def _initializePinInterrupt():
-    pin = machine.Pin(4)
+def _configure_pin_interrupt():
+    pin = INTERRUPT_PIN
     pin.init(pin.IN, pin.PULL_UP)
     esp32.wake_on_ext0(pin, 0)
+
+
+def _configure_rtc_alarm(alarm_time):
+    i2c = machine.I2C(-1, SCL_PIN, SDA_PIN)
+    rtc = urtc.DS3231(i2c)
+
+    rtc.alarm(0, alarm=1)  # Clear previous alarm state of RTC
+    rtc.interrupt(alarm=1)  # Configure alarm on INT/SQW pin of RTC
+    rtc.alarm_time(alarm_time, alarm=1)  # Configure alarm time of RTC
 
 
 def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm):
@@ -43,17 +64,3 @@ def _read_from_wunderground():
     rain_last_hour_mm = int(observation['precip_1hr_metric'])
     rain_today_mm = int(observation['precip_today_metric'])
     return rain_last_hour_mm, rain_today_mm
-
-
-def _sleep_ms():
-    ntptime.settime()
-
-    current_secs = utime.time()
-    current_time = list(utime.localtime(current_secs))
-    # current_time[2] = current_time[2] + 1  # increment day
-    current_time[3] = current_time[3] + 1  # increment hour
-    current_time[4] = 0  # Set minutes to zero
-    current_time[5] = 0  # Set seconds to zero
-
-    next_secs = utime.mktime(tuple(current_time))
-    return (next_secs - current_secs) * 1000
