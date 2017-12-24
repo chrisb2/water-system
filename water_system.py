@@ -1,18 +1,35 @@
 """Monitor local rainfall and disable garden watering system if required."""
 import urequests
+from machine import Pin, ADC
 import machine
 import esp32
+import utime
 import urtc
 import secrets
 
-INTERRUPT_PIN = machine.Pin(4)
-SCL_PIN = machine.Pin(17)
-SDA_PIN = machine.Pin(5)
+INTERRUPT_PIN = Pin(4, Pin.IN, Pin.PULL_UP)
+SCL_PIN = Pin(17)
+SDA_PIN = Pin(5)
+WATER_ON_PIN = Pin(25, Pin.OUT, Pin.PULL_DOWN, value=0)
+WATER_OFF_PIN = Pin(26, Pin.OUT, Pin.PULL_DOWN, value=0)
+BATTERY_PIN = Pin(32)  # ADC
 
-_THINGSPEAK_URL = ('https://api.thingspeak.com/update?api_key={}'
-                   '&field1={}&field2={}')
+# External resister divider (ohms)
+R1 = 330000
+R2 = 100200
+RESISTOR_RATIO = (R1 + R2) / R2
+
+# ADC reference voltage in millivolts
+ADC_REF = 1112
+# Average value from 100 reads when analog pin is grounded
+ADC_OFFSET = 0
+# Number of ADC reads to take average of
+ADC_READS = 100
+
+_THINGSPEAK_URL = \
+   'https://api.thingspeak.com/update?api_key={}&field1={}&field2={}&field3={}'
 _WEATHER_URL = \
-    'http://api.wunderground.com/api/{}/conditions/q{}.json'
+   'http://api.wunderground.com/api/{}/conditions/q{}.json'
 
 # 5AM GMT
 RTC_ALARM = urtc.datetime_tuple(None, None, None, None, 5, 0, None, None)
@@ -20,11 +37,16 @@ RTC_ALARM = urtc.datetime_tuple(None, None, None, None, 5, 0, None, None)
 
 def run():
     """Main entry point to execute this program."""
+    battery_volts = _battery_voltage()
     rain_last_hour_mm, rain_today_mm = _read_from_wunderground()
-    _send_to_thingspeak(rain_last_hour_mm, rain_today_mm)
-    print("Last hour %dmm, today %dmm" % (rain_last_hour_mm, rain_today_mm))
+    _send_to_thingspeak(rain_last_hour_mm, rain_today_mm, battery_volts)
 
-    _sleep_until(RTC_ALARM)
+    if rain_today_mm > 3 or rain_last_hour_mm > 1:
+        _system_off()
+    else:
+        _system_on()
+
+    # _sleep_until(RTC_ALARM)
 
 
 def _sleep_until(alarm_time):
@@ -34,9 +56,7 @@ def _sleep_until(alarm_time):
 
 
 def _configure_pin_interrupt():
-    pin = INTERRUPT_PIN
-    pin.init(pin.IN, pin.PULL_UP)
-    esp32.wake_on_ext0(pin, 0)
+    esp32.wake_on_ext0(INTERRUPT_PIN, 0)
 
 
 def _configure_rtc_alarm(alarm_time):
@@ -48,9 +68,10 @@ def _configure_rtc_alarm(alarm_time):
     rtc.alarm_time(alarm_time, alarm=1)  # Configure alarm time of RTC
 
 
-def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm):
+def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm, battery_volts):
     url = _THINGSPEAK_URL.format(secrets.THINGSPEAK_API_KEY,
-                                 rain_last_hour_mm, rain_today_mm)
+                                 rain_last_hour_mm, rain_today_mm,
+                                 battery_volts)
     req = urequests.get(url)
     req.close()
 
@@ -63,4 +84,29 @@ def _read_from_wunderground():
     req.close()
     rain_last_hour_mm = int(observation['precip_1hr_metric'])
     rain_today_mm = int(observation['precip_today_metric'])
+    print("Last hour %dmm, today %dmm" % (rain_last_hour_mm, rain_today_mm))
     return rain_last_hour_mm, rain_today_mm
+
+
+def _system_on():
+    _pulse_relay(WATER_ON_PIN)
+
+
+def _system_off():
+    _pulse_relay(WATER_OFF_PIN)
+
+
+def _pulse_relay(pin):
+    pin.value(1)
+    # 10ms minimum time to alter relay latch as per specification
+    utime.sleep_ms(10)
+    pin.value(0)
+
+
+def _battery_voltage():
+    adc = ADC(BATTERY_PIN)
+    sum = 0
+    for x in range(0, ADC_READS):
+        sum += adc.read()
+    return ADC_REF * RESISTOR_RATIO * \
+        (sum / ADC_READS - ADC_OFFSET) / 4096 / 1000
