@@ -12,6 +12,7 @@ SCL_PIN = Pin(17)
 SDA_PIN = Pin(5)
 WATER_ON_PIN = Pin(25, Pin.OUT, Pin.PULL_DOWN, value=0)
 WATER_OFF_PIN = Pin(26, Pin.OUT, Pin.PULL_DOWN, value=0)
+NO_SLEEP_PIN = Pin(27, Pin.IN, Pin.PULL_DOWN, value=0)
 BATTERY_PIN = Pin(32)  # ADC
 
 # External resister divider (ohms)
@@ -32,21 +33,27 @@ _WEATHER_URL = \
    'http://api.wunderground.com/api/{}/conditions/q{}.json'
 
 # 5AM GMT
-RTC_ALARM = urtc.datetime_tuple(None, None, None, None, 5, 0, None, None)
+# RTC_ALARM = urtc.datetime_tuple(None, None, None, None, 5, 0, None, None)
+RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, 0, None, None)
 
 
 def run():
     """Main entry point to execute this program."""
     battery_volts = _battery_voltage()
-    rain_last_hour_mm, rain_today_mm = _read_from_wunderground()
-    _send_to_thingspeak(rain_last_hour_mm, rain_today_mm, battery_volts)
+    try:
+        rain_last_hour_mm, rain_today_mm = _read_from_wunderground()
+        _send_to_thingspeak(rain_last_hour_mm, rain_today_mm, battery_volts)
+    except Exception:
+        # Catch exceptions so that device goes back to sleep if HTTP calls fail
+        rain_last_hour_mm, rain_today_mm = (0, 0)
 
     if rain_today_mm > 3 or rain_last_hour_mm > 1:
         _system_off()
     else:
         _system_on()
 
-    # _sleep_until(RTC_ALARM)
+    if _sleep_enabled():
+        _sleep_until(RTC_ALARM)
 
 
 def _sleep_until(alarm_time):
@@ -98,7 +105,7 @@ def _system_off():
 
 def _pulse_relay(pin):
     pin.value(1)
-    # 10ms minimum time to alter relay latch as per specification
+    # 10ms minimum time to alter relay latch as per specification of G6SK-2
     utime.sleep_ms(10)
     pin.value(0)
 
@@ -110,3 +117,7 @@ def _battery_voltage():
         sum += adc.read()
     return ADC_REF * RESISTOR_RATIO * \
         (sum / ADC_READS - ADC_OFFSET) / 4096 / 1000
+
+
+def _sleep_enabled():
+    return NO_SLEEP_PIN.value() == 0
