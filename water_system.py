@@ -39,6 +39,8 @@ RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, 0, None, None)
 
 def run():
     """Main entry point to execute this program."""
+    sleep_enabled = _sleep_enabled()
+
     battery_volts = _battery_voltage()
     try:
         rain_last_hour_mm, rain_today_mm = _read_from_wunderground()
@@ -52,13 +54,19 @@ def run():
     else:
         _system_on()
 
-    if _sleep_enabled():
+    if sleep_enabled:
         _sleep_until(RTC_ALARM)
+
+
+def datetime():
+    """Get current date/time from RTC."""
+    return _get_rtc().datetime()
 
 
 def _sleep_until(alarm_time):
     _configure_pin_interrupt()
     _configure_rtc_alarm(alarm_time)
+    print('Sleeping...')
     machine.deepsleep()
 
 
@@ -66,9 +74,13 @@ def _configure_pin_interrupt():
     esp32.wake_on_ext0(INTERRUPT_PIN, 0)
 
 
-def _configure_rtc_alarm(alarm_time):
+def _get_rtc():
     i2c = machine.I2C(-1, SCL_PIN, SDA_PIN)
-    rtc = urtc.DS3231(i2c)
+    return urtc.DS3231(i2c)
+
+
+def _configure_rtc_alarm(alarm_time):
+    rtc = _get_rtc()
 
     rtc.alarm(0, alarm=1)  # Clear previous alarm state of RTC
     rtc.interrupt(alarm=1)  # Configure alarm on INT/SQW pin of RTC

@@ -1,10 +1,9 @@
 """WiFi configuration."""
 import network
-from utime import ticks_ms, ticks_diff
+from utime import ticks_ms, ticks_diff, sleep
 import secrets
 
 WIFI_DELAY = 5
-net_conf = ('192.168.1.25', '255.255.255.0', '192.168.1.1', '8.8.8.8')
 
 
 def connect():
@@ -12,11 +11,15 @@ def connect():
     start = ticks_ms()
 
     print('Connecting to network...')
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    wlan.ifconfig(net_conf)
-    wlan.connect(secrets.WIFI_SSID, secrets.WIFI_PASSPHRASE)
 
-    if wlan.isconnected():
-        print('Network to address %s in %dms' %
-              (wlan.ifconfig()[0], ticks_diff(ticks_ms(), start)))
+    sta_if = network.WLAN(network.STA_IF)
+    sta_if.active(True)
+    sta_if.connect(secrets.WIFI_SSID, secrets.WIFI_PASSPHRASE)
+
+    secs = WIFI_DELAY
+    while secs >= 0 and not sta_if.isconnected():
+        sleep(1)
+        secs -= 1
+    if sta_if.isconnected():
+        print('Network, address: %s in %d ms' %
+              (sta_if.ifconfig()[0], ticks_diff(ticks_ms(), start)))
