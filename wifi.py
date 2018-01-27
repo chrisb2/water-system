@@ -3,11 +3,13 @@ import network
 from utime import ticks_ms, ticks_diff, sleep
 import secrets
 
-WIFI_DELAY = 5
+WIFI_DELAY = 30
+CHECK_INTERVAL = 0.2
 
 
 def connect():
     """Connect to WiFi."""
+    connected = False
     start = ticks_ms()
 
     print('Connecting to network...')
@@ -18,8 +20,11 @@ def connect():
 
     secs = WIFI_DELAY
     while secs >= 0 and not sta_if.isconnected():
-        sleep(1)
-        secs -= 1
+        sleep(CHECK_INTERVAL)
+        secs -= CHECK_INTERVAL
     if sta_if.isconnected():
         print('Network, address: %s in %d ms' %
               (sta_if.ifconfig()[0], ticks_diff(ticks_ms(), start)))
+        connected = True
+
+    return connected

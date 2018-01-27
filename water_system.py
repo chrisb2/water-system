@@ -5,6 +5,7 @@ import machine
 import esp32
 import utime
 import urtc
+import wifi
 import secrets
 
 INTERRUPT_PIN = Pin(4, Pin.IN, Pin.PULL_UP)
@@ -39,15 +40,21 @@ RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, 0, None, None)
 
 def run():
     """Main entry point to execute this program."""
+    # Set variables so that system defaults to ON avoiding garden never being
+    # watered if execution repeatedly fails.
+    rain_last_hour_mm, rain_today_mm = (0, 0)
+
     sleep_enabled = _sleep_enabled()
 
     battery_volts = _battery_voltage()
     try:
-        rain_last_hour_mm, rain_today_mm = _read_from_wunderground()
-        _send_to_thingspeak(rain_last_hour_mm, rain_today_mm, battery_volts)
+        if wifi.connect():
+            rain_last_hour_mm, rain_today_mm = _read_from_wunderground()
+            _send_to_thingspeak(rain_last_hour_mm, rain_today_mm, battery_volts)
     except Exception:
-        # Catch exceptions so that device goes back to sleep if HTTP calls fail
-        rain_last_hour_mm, rain_today_mm = (0, 0)
+        # Catch exceptions so that device goes back to sleep if WiFi connect or
+        # HTTP calls fail with exceptions
+        pass
 
     if rain_today_mm > 3 or rain_last_hour_mm > 1:
         _system_off()
