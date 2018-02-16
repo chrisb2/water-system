@@ -28,10 +28,13 @@ ADC_OFFSET = 0
 # Number of ADC reads to take average of
 ADC_READS = 100
 
-_THINGSPEAK_URL = \
-   'https://api.thingspeak.com/update?api_key={}&field1={}&field2={}&field3={}'
+_THINGSPEAK_URL = (
+    'https://api.thingspeak.com/update'
+    '?api_key={}&field1={}&field2={}&field3={}&field4={}')
 _WEATHER_URL = \
    'http://api.wunderground.com/api/{}/conditions/q{}.json'
+_FORECAST_URL = \
+   'http://api.wunderground.com/api/{}/geolookup/forecast/q/{}.json'
 
 # 5AM GMT
 # RTC_ALARM = urtc.datetime_tuple(None, None, None, None, 5, 0, None, None)
@@ -43,20 +46,23 @@ def run():
     # Set variables so that system defaults to ON avoiding garden never being
     # watered if execution repeatedly fails.
     rain_last_hour_mm, rain_today_mm = (0, 0)
+    rain_forecast_today_mm, rain_forecast_tomorrow_mm = (0, 0)
 
     sleep_enabled = _sleep_enabled()
 
     battery_volts = _battery_voltage()
     try:
         if wifi.connect():
-            rain_last_hour_mm, rain_today_mm = _read_from_wunderground()
-            _send_to_thingspeak(rain_last_hour_mm, rain_today_mm, battery_volts)
+            rain_last_hour_mm, rain_today_mm = _read_weather()
+            rain_forecast_today_mm, rain_forecast_tomorrow_mm = _read_forecast()
+            _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
+                                rain_forecast_today_mm, battery_volts)
     except Exception:
         # Catch exceptions so that device goes back to sleep if WiFi connect or
         # HTTP calls fail with exceptions
         pass
 
-    if rain_today_mm > 3 or rain_last_hour_mm > 1:
+    if (rain_today_mm > 3 or rain_last_hour_mm > 1 or rain_forecast_today_mm > 1):
         _system_off()
     else:
         _system_on()
@@ -94,15 +100,16 @@ def _configure_rtc_alarm(alarm_time):
     rtc.alarm_time(alarm_time, alarm=1)  # Configure alarm time of RTC
 
 
-def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm, battery_volts):
+def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
+                        rain_forecast_today_mm, battery_volts):
     url = _THINGSPEAK_URL.format(secrets.THINGSPEAK_API_KEY,
                                  rain_last_hour_mm, rain_today_mm,
-                                 battery_volts)
+                                 rain_forecast_today_mm, battery_volts)
     req = urequests.get(url)
     req.close()
 
 
-def _read_from_wunderground():
+def _read_weather():
     url = _WEATHER_URL.format(secrets.WUNDERGROUND_API_KEY,
                               secrets.WUNDERGROUND_STATION)
     req = urequests.get(url)
@@ -112,6 +119,18 @@ def _read_from_wunderground():
     rain_today_mm = int(observation['precip_today_metric'])
     print("Last hour %dmm, today %dmm" % (rain_last_hour_mm, rain_today_mm))
     return rain_last_hour_mm, rain_today_mm
+
+
+def _read_forecast():
+    url = _FORECAST_URL.format(secrets.WUNDERGROUND_API_KEY,
+                               secrets.WUNDERGROUND_LOCATION)
+    req = urequests.get(url)
+    forecast = req.json()['forecast']['simpleforecast']['forecastday']
+    req.close()
+    rain_today_mm = int(forecast[0]['qpf_allday']['mm'])
+    rain_tomorrow_mm = int(forecast[1]['qpf_allday']['mm'])
+    print("Today %dmm, tomorrow %dmm" % (rain_today_mm, rain_tomorrow_mm))
+    return rain_today_mm, rain_tomorrow_mm
 
 
 def _system_on():
