@@ -5,24 +5,25 @@ import machine
 import esp32
 import utime
 import urtc
+import ntptime
 import wifi
 import secrets
 
-INTERRUPT_PIN = Pin(4, Pin.IN, Pin.PULL_UP)
+WAKEUP_PIN = Pin(4, Pin.IN, Pin.PULL_UP)
 SCL_PIN = Pin(17)
 SDA_PIN = Pin(5)
-WATER_ON_PIN = Pin(25, Pin.OUT, Pin.PULL_DOWN, value=0)
-WATER_OFF_PIN = Pin(26, Pin.OUT, Pin.PULL_DOWN, value=0)
-NO_SLEEP_PIN = Pin(27, Pin.IN, Pin.PULL_DOWN, value=0)
-BATTERY_PIN = Pin(32)  # ADC
+WATER_ON_PIN = Pin(33, Pin.OUT, Pin.PULL_DOWN, value=0)
+WATER_OFF_PIN = Pin(32, Pin.OUT, Pin.PULL_DOWN, value=0)
+NO_SLEEP_PIN = Pin(26, Pin.IN, Pin.PULL_DOWN, value=0)
+BATTERY_PIN = Pin(34)  # ADC
 
 # External resister divider (ohms)
-R1 = 330000
-R2 = 100200
+R1 = 10070000
+R2 = 3329000
 RESISTOR_RATIO = (R1 + R2) / R2
 
-# ADC reference voltage in millivolts
-ADC_REF = 1112
+# ADC reference voltage in millivolts (adjust for each ESP32)
+ADC_REF = 1102
 # Average value from 100 reads when analog pin is grounded
 ADC_OFFSET = 0
 # Number of ADC reads to take average of
@@ -38,6 +39,7 @@ _FORECAST_URL = \
 
 # 5AM GMT
 # RTC_ALARM = urtc.datetime_tuple(None, None, None, None, 5, 0, None, None)
+# Every hour
 RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, 0, None, None)
 
 
@@ -76,6 +78,22 @@ def datetime():
     return _get_rtc().datetime()
 
 
+def initialize_rtc_from_ntp():
+    """Initialize RTC date/time from NTP."""
+    ntptime.settime()
+
+    current_time = list(utime.localtime())
+    time_to_set = []
+    time_to_set.append(current_time[0])  # Year
+    time_to_set.append(current_time[1])  # Month
+    time_to_set.append(current_time[2])  # Day
+    time_to_set.append(current_time[6])
+    time_to_set.append(current_time[3])  # Hour
+    time_to_set.append(current_time[4])  # Minute
+    time_to_set.append(current_time[5])  # Second
+    _get_rtc().datetime(time_to_set)
+
+
 def _sleep_until(alarm_time):
     _configure_pin_interrupt()
     _configure_rtc_alarm(alarm_time)
@@ -84,7 +102,7 @@ def _sleep_until(alarm_time):
 
 
 def _configure_pin_interrupt():
-    esp32.wake_on_ext0(INTERRUPT_PIN, 0)
+    esp32.wake_on_ext0(WAKEUP_PIN, 0)
 
 
 def _get_rtc():
