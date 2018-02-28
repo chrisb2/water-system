@@ -2,10 +2,8 @@
 import urequests
 from machine import Pin, ADC
 import machine
-import esp32
 import utime
 import urtc
-import ntptime
 import wifi
 import secrets
 
@@ -23,9 +21,7 @@ R2 = 3329000
 RESISTOR_RATIO = (R1 + R2) / R2
 
 # ADC reference voltage in millivolts (adjust for each ESP32)
-ADC_REF = 1102
-# Average value from 100 reads when analog pin is grounded
-ADC_OFFSET = 0
+ADC_REF = 1117
 # Number of ADC reads to take average of
 ADC_READS = 100
 
@@ -41,6 +37,8 @@ _FORECAST_URL = \
 # RTC_ALARM = urtc.datetime_tuple(None, None, None, None, 5, 0, None, None)
 # Every hour
 RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, 0, None, None)
+# Every minute
+# RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, None, 0, None)
 
 
 def run():
@@ -63,6 +61,8 @@ def run():
         # Catch exceptions so that device goes back to sleep if WiFi connect or
         # HTTP calls fail with exceptions
         pass
+    finally:
+        wifi.disconnect()
 
     if (rain_today_mm > 3 or rain_last_hour_mm > 1 or rain_forecast_today_mm > 1):
         _system_off()
@@ -80,14 +80,15 @@ def datetime():
 
 def initialize_rtc_from_ntp():
     """Initialize RTC date/time from NTP."""
-    ntptime.settime()
+    rtc = machine.RTC()
+    rtc.ntp_sync(server="pool.ntp.org")
 
     current_time = list(utime.localtime())
     time_to_set = []
     time_to_set.append(current_time[0])  # Year
     time_to_set.append(current_time[1])  # Month
     time_to_set.append(current_time[2])  # Day
-    time_to_set.append(current_time[6])
+    time_to_set.append(current_time[6])  # Weekday
     time_to_set.append(current_time[3])  # Hour
     time_to_set.append(current_time[4])  # Minute
     time_to_set.append(current_time[5])  # Second
@@ -102,11 +103,12 @@ def _sleep_until(alarm_time):
 
 
 def _configure_pin_interrupt():
-    esp32.wake_on_ext0(WAKEUP_PIN, 0)
+    rtc = machine.RTC()
+    rtc.wake_on_ext0(WAKEUP_PIN, 0)
 
 
 def _get_rtc():
-    i2c = machine.I2C(-1, SCL_PIN, SDA_PIN)
+    i2c = machine.I2C(1, sda=SDA_PIN, scl=SCL_PIN)
     return urtc.DS3231(i2c)
 
 
@@ -167,12 +169,13 @@ def _pulse_relay(pin):
 
 
 def _battery_voltage():
+    machine.ADC.vref(vref=ADC_REF)
     adc = ADC(BATTERY_PIN)
     sum = 0
     for x in range(0, ADC_READS):
         sum += adc.read()
-    return ADC_REF * RESISTOR_RATIO * \
-        (sum / ADC_READS - ADC_OFFSET) / 4096 / 1000
+    return RESISTOR_RATIO * \
+        (sum / ADC_READS) / 1000
 
 
 def _sleep_enabled():

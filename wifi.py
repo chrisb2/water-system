@@ -3,7 +3,7 @@ import network
 from utime import ticks_ms, ticks_diff, sleep
 import secrets
 
-WIFI_DELAY = 30
+WIFI_DELAY = 20
 CHECK_INTERVAL = 0.2
 
 
@@ -28,3 +28,15 @@ def connect():
         connected = True
 
     return connected
+
+
+def disconnect():
+    """Disconnect from WiFi."""
+    sta_if = network.WLAN(network.STA_IF)
+    if sta_if.isconnected():
+        sta_if.disconnect()
+
+    secs = WIFI_DELAY
+    while secs >= 0 and sta_if.isconnected():
+        sleep(CHECK_INTERVAL)
+        secs -= CHECK_INTERVAL
