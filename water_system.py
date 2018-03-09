@@ -21,32 +21,31 @@ R2 = 3329000
 RESISTOR_RATIO = (R1 + R2) / R2
 
 # ADC reference voltage in millivolts (adjust for each ESP32)
-ADC_REF = 1117
+ADC_REF = 1165
 # Number of ADC reads to take average of
 ADC_READS = 100
 
 _THINGSPEAK_URL = (
     'https://api.thingspeak.com/update'
-    '?api_key={}&field1={}&field2={}&field3={}&field4={}')
+    '?api_key={}&field1={}&field2={}&field3={}&field4={}&field5={}')
 _WEATHER_URL = \
    'http://api.wunderground.com/api/{}/conditions/q{}.json'
 _FORECAST_URL = \
    'http://api.wunderground.com/api/{}/geolookup/forecast/q/{}.json'
 
 # 5AM GMT
-# RTC_ALARM = urtc.datetime_tuple(None, None, None, None, 5, 0, None, None)
+RTC_ALARM = urtc.datetime_tuple(None, None, None, None, 5, 0, None, None)
 # Every hour
-RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, 0, None, None)
+# RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, 0, None, None)
 # Every minute
 # RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, None, 0, None)
 
 
 def run():
     """Main entry point to execute this program."""
-    # Set variables so that system defaults to ON avoiding garden never being
+    # Set variable so that system defaults to ON avoiding garden never being
     # watered if execution repeatedly fails.
-    rain_last_hour_mm, rain_today_mm = (0, 0)
-    rain_forecast_today_mm, rain_forecast_tomorrow_mm = (0, 0)
+    rainfall = False
 
     sleep_enabled = _sleep_enabled()
 
@@ -55,8 +54,13 @@ def run():
         if wifi.connect():
             rain_last_hour_mm, rain_today_mm = _read_weather()
             rain_forecast_today_mm, rain_forecast_tomorrow_mm = _read_forecast()
+
+            rainfall = (rain_today_mm > 3 or rain_last_hour_mm > 1
+                        or rain_forecast_today_mm > 1)
+
             _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
-                                rain_forecast_today_mm, battery_volts)
+                                rain_forecast_today_mm, battery_volts,
+                                rainfall)
     except Exception:
         # Catch exceptions so that device goes back to sleep if WiFi connect or
         # HTTP calls fail with exceptions
@@ -64,7 +68,7 @@ def run():
     finally:
         wifi.disconnect()
 
-    if (rain_today_mm > 3 or rain_last_hour_mm > 1 or rain_forecast_today_mm > 1):
+    if rainfall:
         _system_off()
     else:
         _system_on()
@@ -121,10 +125,11 @@ def _configure_rtc_alarm(alarm_time):
 
 
 def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
-                        rain_forecast_today_mm, battery_volts):
+                        rain_forecast_today_mm, battery_volts, system_off):
     url = _THINGSPEAK_URL.format(secrets.THINGSPEAK_API_KEY,
                                  rain_last_hour_mm, rain_today_mm,
-                                 rain_forecast_today_mm, battery_volts)
+                                 rain_forecast_today_mm, battery_volts,
+                                 int(not system_off))
     req = urequests.get(url)
     req.close()
 
