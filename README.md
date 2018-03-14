@@ -48,4 +48,4 @@ WUNDERGROUND_API_KEY = 'XXXXXX'
 WUNDERGROUND_STATION = '/NZ/christchurch'
 WUNDERGROUND_LOCATION = 'zmw:00000.7.93781'
 ```
-Copy all three files with the rest of the python files to the ESP32.
+Copy both files with the rest of the python files to the ESP32.
