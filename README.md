@@ -6,13 +6,18 @@ significant rain has fallen in the last day, or is forecast today, and if so
 disables the garden watering system to conserve water. It reports the rainfall
 and system status to [ThingSpeak](https://thingspeak.com).
 
+The code depends on the Loboris fork of [MicroPython for ESP32](https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo]). The 'esp32' firmware required can be [downloaded here](https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo/wiki/firmwares).
+
 The project is run off a single 1600mAh LiFePO4 battery (18650) and uses the deep sleep mode of the ESP32 to
 extend the battery life.
 
-This controller is suitable for use with automatic watering system which expose
+This controller is suitable for use with automatic watering systems which expose
 the ability to disable the system by making a connection open circuit.
 
 ## Schematic
+
+If the schematic appears to be missing details, download it and view it locally,
+or zoom the web page.
 
 ![Circuit Schematic](./schematic-garden-watering-controller.svg)
 
