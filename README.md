@@ -15,7 +15,6 @@ the ability to disable the system by making a connection open circuit.
 ## Schematic
 
 ![Circuit Schematic](./schematic-garden-watering-controller.svg)
-<img src="./schematic-garden-watering-controller.svg">
 
 ## Usage
 
