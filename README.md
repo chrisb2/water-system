@@ -21,14 +21,21 @@ or zoom the web page.
 
 ![Circuit Schematic](./schematic-garden-watering-controller.svg)
 
+## Container
+
+I used a polycarbonate box with a build-in O-ring seal. A
+[PTFE breathable vent](https://nicegear.nz/product/waterproof-breathable-enclosure-vent)
+was fitted to allow air, but not water vapor in and out. The electrical
+connections exiting the container to the water system must be completely
+sealed.
+
 ## Usage
 
 Configure a ThingSpeak channel something like:
 
 ![ThingSpeak channel](https://github.com/chrisb2/water-system/raw/master/thingspeak-settings.png "ThingSpeak Channel Settings")
 
-Download the libraries:
-* [urequests](https://raw.githubusercontent.com/micropython/micropython-lib/master/urequests/urequests.py) HTTP library.
+Download the library:
 * [urtc](https://raw.githubusercontent.com/chrisb2/Adafruit-uRTC/master/urtc.py) real time clock library.
 
 Create a file called _secrets.py_ and fill in appropriate values:
