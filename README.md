@@ -9,12 +9,13 @@ and system status to [ThingSpeak](https://thingspeak.com).
 The project is run off a single 1600mAh LiFePO4 battery (18650) and uses the deep sleep mode of the ESP32 to
 extend the battery life.
 
-This controller is suitable for use with all automatic watering system which expose
+This controller is suitable for use with automatic watering system which expose
 the ability to disable the system by making a connection open circuit.
 
 ## Schematic
 
-![Schematic](https://github.com/chrisb2/water-system/raw/master/schematic-garden-watering-controller.png "Water Controller Schematic")
+![Circuit Schematic](./schematic-garden-watering-controller.svg)
+<img src="./schematic-garden-watering-controller.svg">
 
 ## Usage
 
