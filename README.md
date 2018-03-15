@@ -36,7 +36,7 @@ Configure a ThingSpeak channel something like:
 ![ThingSpeak channel](https://github.com/chrisb2/water-system/raw/master/thingspeak-settings.png "ThingSpeak Channel Settings")
 
 Download the library:
-* [urtc](https://raw.githubusercontent.com/chrisb2/Adafruit-uRTC/master/urtc.py) real time clock library.
+* [urtc](https://raw.githubusercontent.com/chrisb2/Adafruit-uRTC/master/urtc.py) real time clock (RTC) library.
 
 Create a file called _secrets.py_ and fill in appropriate values:
 ```python
@@ -48,4 +48,24 @@ WUNDERGROUND_API_KEY = 'XXXXXX'
 WUNDERGROUND_STATION = '/NZ/christchurch'
 WUNDERGROUND_LOCATION = 'zmw:00000.7.93781'
 ```
-Copy both files with the rest of the python files to the ESP32.
+By default the RTC will wake the ESP32 from deep sleep at 5am GMT every day, if
+you want a different time edit the value of the _RTC_ALARM_ constant in
+_water_system.py_.
+
+Copy all the python files to the ESP32.
+
+Set the 'No Sleep' DIP switch to 'on', press the RST button to reset the ESP32,
+then connect using Putty or similar serial client and initialize the RTC by
+executing the following:
+```python
+import wifi
+import water_system
+
+wifi.connect()
+water_system.initialize_rtc_from_ntp()
+
+# Get date time, to verify setting.
+water_system.datetime()
+```
+Set the 'No Sleep' DIP switch to 'off', press the RST button to reset the ESP32
+and connect to your water system.
