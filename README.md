@@ -6,7 +6,7 @@ significant rain has fallen in the last day, or is forecast today, and if so
 disables the garden watering system to conserve water. It reports the rainfall
 and system status to [ThingSpeak](https://thingspeak.com).
 
-The code depends on the Loboris fork of [MicroPython for ESP32](https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo]). The 'esp32' firmware required can be [downloaded here](https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo/wiki/firmwares).
+The code depends on the Loboris fork of [MicroPython for ESP32](https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo). The 'esp32' firmware required can be [downloaded here](https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo/wiki/firmwares).
 
 The project is run off a single 1600mAh LiFePO4 battery (18650) and uses the deep sleep mode of the ESP32 to
 extend the battery life.
@@ -26,7 +26,7 @@ or zoom the web page.
 I used a polycarbonate box with a build-in O-ring seal. A
 [PTFE breathable vent](https://nicegear.nz/product/waterproof-breathable-enclosure-vent)
 was fitted to allow air, but not water vapor in and out. The electrical
-connections exiting the container to the water system must be completely
+connections exiting the container to the watering system must be completely
 sealed.
 
 ## Usage
