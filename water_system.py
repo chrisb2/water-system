@@ -4,8 +4,12 @@ from machine import Pin, ADC
 import machine
 import utime
 import urtc
+import io
+import sys
+import gc
 import wifi
 import secrets
+import config
 
 WAKEUP_PIN = Pin(4, Pin.IN, Pin.PULL_UP)
 SCL_PIN = Pin(17)
@@ -16,12 +20,8 @@ NO_SLEEP_PIN = Pin(26, Pin.IN, Pin.PULL_DOWN, value=0)
 BATTERY_PIN = Pin(34)  # ADC
 
 # External resister divider (ohms)
-R1 = 10070000
-R2 = 3329000
-RESISTOR_RATIO = (R1 + R2) / R2
+RESISTOR_RATIO = (config.R1 + config.R2) / config.R2
 
-# ADC reference voltage in millivolts (adjust for each ESP32)
-ADC_REF = 1165
 # Number of ADC reads to take average of
 ADC_READS = 100
 
@@ -29,29 +29,27 @@ _THINGSPEAK_URL = (
     'https://api.thingspeak.com/update'
     '?api_key={}&field1={}&field2={}&field3={}&field4={}&field5={}')
 _WEATHER_URL = \
-   'http://api.wunderground.com/api/{}/conditions/q{}.json'
+   'http://api.wunderground.com/api/{}/conditions/q{}.json'.format(
+       secrets.WUNDERGROUND_API_KEY, config.WUNDERGROUND_STATION)
 _FORECAST_URL = \
-   'http://api.wunderground.com/api/{}/geolookup/forecast/q/{}.json'
+   'http://api.wunderground.com/api/{}/geolookup/forecast/q/{}.json'.format(
+       secrets.WUNDERGROUND_API_KEY, config.WUNDERGROUND_LOCATION)
 
-# 5AM GMT
-RTC_ALARM = urtc.datetime_tuple(None, None, None, None, 5, 0, None, None)
-# Every hour
-# RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, 0, None, None)
-# Every minute
-# RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, None, 0, None)
+i2c = machine.I2C(1, sda=SDA_PIN, scl=SCL_PIN)
 
 
 def run():
     """Main entry point to execute this program."""
     # Set variable so that system defaults to ON avoiding garden never being
     # watered if execution repeatedly fails.
-    rainfall = False
-
-    sleep_enabled = _sleep_enabled()
-
-    battery_volts = _battery_voltage()
     try:
+        _log_message('Running')
+        rainfall = False
+        sleep_enabled = _sleep_enabled()
+
+        battery_volts = _battery_voltage()
         if wifi.connect():
+            _log_message('WIFI connected')
             rain_last_hour_mm, rain_today_mm = _read_weather()
             rain_forecast_today_mm, rain_forecast_tomorrow_mm = _read_forecast()
 
@@ -61,20 +59,29 @@ def run():
             _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
                                 rain_forecast_today_mm, battery_volts,
                                 rainfall)
-    except Exception:
+
+        if rainfall:
+            _log_message('System OFF')
+            _system_off()
+        else:
+            _log_message('System ON')
+            _system_on()
+
+    except Exception as ex:
         # Catch exceptions so that device goes back to sleep if WiFi connect or
         # HTTP calls fail with exceptions
-        pass
+        # pass
+        _log_exception_to_file(ex)
     finally:
-        wifi.disconnect()
+        try:
+            wifi.disconnect()
+            _log_message('WIFI disconnected')
+        except Exception as ex:
+            _log_exception_to_file(ex)
 
-    if rainfall:
-        _system_off()
-    else:
-        _system_on()
-
-    if sleep_enabled:
-        _sleep_until(RTC_ALARM)
+        if sleep_enabled:
+            _log_message('Sleeping...')
+            _sleep_until(config.RTC_ALARM)
 
 
 def datetime():
@@ -112,13 +119,11 @@ def _configure_pin_interrupt():
 
 
 def _get_rtc():
-    i2c = machine.I2C(1, sda=SDA_PIN, scl=SCL_PIN)
     return urtc.DS3231(i2c)
 
 
 def _configure_rtc_alarm(alarm_time):
     rtc = _get_rtc()
-
     rtc.alarm(0, alarm=1)  # Clear previous alarm state of RTC
     rtc.interrupt(alarm=1)  # Configure alarm on INT/SQW pin of RTC
     rtc.alarm_time(alarm_time, alarm=1)  # Configure alarm time of RTC
@@ -130,32 +135,73 @@ def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
                                  rain_last_hour_mm, rain_today_mm,
                                  rain_forecast_today_mm, battery_volts,
                                  int(not system_off))
-    req = urequests.get(url)
-    req.close()
+    response = None
+    try:
+        response = urequests.get(url)
+    finally:
+        if response is not None:
+            response.close()
 
 
 def _read_weather():
-    url = _WEATHER_URL.format(secrets.WUNDERGROUND_API_KEY,
-                              secrets.WUNDERGROUND_STATION)
-    req = urequests.get(url)
-    observation = req.json().get('current_observation')
-    req.close()
-    rain_last_hour_mm = int(observation['precip_1hr_metric'])
-    rain_today_mm = int(observation['precip_today_metric'])
+    rain_last_hour_mm, rain_today_mm = (0, 0)
+    try:
+        json = _request_json(_WEATHER_URL, attributes=['precip_1hr_metric', 'precip_today_metric'])
+        if json is not None:
+            rain_last_hour_mm = _int_value(json['precip_1hr_metric'])
+            rain_today_mm = _int_value(json['precip_today_metric'])
+    except Exception as ex:
+        _log_exception_to_file(ex)
     print("Last hour %dmm, today %dmm" % (rain_last_hour_mm, rain_today_mm))
     return rain_last_hour_mm, rain_today_mm
 
 
 def _read_forecast():
-    url = _FORECAST_URL.format(secrets.WUNDERGROUND_API_KEY,
-                               secrets.WUNDERGROUND_LOCATION)
-    req = urequests.get(url)
-    forecast = req.json()['forecast']['simpleforecast']['forecastday']
-    req.close()
-    rain_today_mm = int(forecast[0]['qpf_allday']['mm'])
-    rain_tomorrow_mm = int(forecast[1]['qpf_allday']['mm'])
+    rain_today_mm, rain_tomorrow_mm = (0, 0)
+    try:
+        json = _request_json(_FORECAST_URL, object='qpf_allday')
+        if json is not None:
+            rain_today_mm = _int_value(json[0]['qpf_allday']['mm'])
+            rain_tomorrow_mm = _int_value(json[1]['qpf_allday']['mm'])
+    except Exception as ex:
+        _log_exception_to_file(ex)
     print("Today %dmm, tomorrow %dmm" % (rain_today_mm, rain_tomorrow_mm))
     return rain_today_mm, rain_tomorrow_mm
+
+
+def _request_json(url, object=None, attributes=None):
+    response = None
+    json = None
+    gc.collect()
+    try:
+        _log_message("Req to: %s" % url)
+        response = urequests.get(url)
+        _log_message("Resp received: %d" % response.status_code)
+        if response.status_code == 200:
+            if attributes is None and object is None:
+                json = response.json()
+            elif object is not None:
+                json = response.json_objects(object)
+            elif attributes is not None:
+                json = response.json_attributes(attributes)
+    finally:
+        _log_message("Req completed")
+        if response is not None:
+            response.close()
+            _log_message("Resp closed")
+    gc.collect()
+    return json
+
+
+def _int_value(attribute):
+    """Convert to int, coerce invalid values ('--', '-9999.00') to zero."""
+    try:
+        val = int(attribute)
+        if val < 0:
+            val = 0
+        return val
+    except (ValueError, TypeError):
+        return 0
 
 
 def _system_on():
@@ -174,14 +220,28 @@ def _pulse_relay(pin):
 
 
 def _battery_voltage():
-    machine.ADC.vref(vref=ADC_REF)
+    machine.ADC.vref(vref=config.ADC_REF)
     adc = ADC(BATTERY_PIN)
     sum = 0
     for x in range(0, ADC_READS):
         sum += adc.read()
-    return RESISTOR_RATIO * \
-        (sum / ADC_READS) / 1000
+    return RESISTOR_RATIO * (sum / ADC_READS) / 1000
 
 
 def _sleep_enabled():
     return NO_SLEEP_PIN.value() == 0
+
+
+def _log_message(message):
+    with io.open('system.log', mode='wa') as log_file:
+        log_file.write('%s - %s\n' % (_datetime_str(), message))
+
+
+def _log_exception_to_file(ex):
+    with io.open('system.log', mode='wa') as log_file:
+        log_file.write('%s\n' % _datetime_str())
+        sys.print_exception(ex, log_file)
+
+
+def _datetime_str():
+    return '-'.join(map(str, datetime()))
