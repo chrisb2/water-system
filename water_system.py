@@ -4,12 +4,15 @@ from machine import Pin, ADC
 import machine
 import utime
 import urtc
+import ure
 import io
 import sys
 import gc
 import wifi
 import secrets
 import config
+
+DEBUG = True
 
 WAKEUP_PIN = Pin(4, Pin.IN, Pin.PULL_UP)
 SCL_PIN = Pin(17)
@@ -36,6 +39,8 @@ _FORECAST_URL = \
        secrets.WUNDERGROUND_API_KEY, config.WUNDERGROUND_LOCATION)
 
 i2c = machine.I2C(1, sda=SDA_PIN, scl=SCL_PIN)
+weather_regex = ure.compile('precip.*metric\":\"([ ,0-9]*)\"')
+forecast_regex = ure.compile('qpf_allday.*\n.*\n\s*\"mm\":([ ,0-9]*)\n')
 
 
 def run():
@@ -146,10 +151,15 @@ def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
 def _read_weather():
     rain_last_hour_mm, rain_today_mm = (0, 0)
     try:
-        json = _request_json(_WEATHER_URL, attributes=['precip_1hr_metric', 'precip_today_metric'])
-        if json is not None:
-            rain_last_hour_mm = _int_value(json['precip_1hr_metric'])
-            rain_today_mm = _int_value(json['precip_today_metric'])
+        results = []
+        with urequests.get(_WEATHER_URL) as response:
+            if response.status_code == 200:
+                for line in response.iter_lines():
+                    match = weather_regex.search(line.decode('UTF-8'))
+                    if match is not None:
+                        results.append(match.group(1))
+                rain_last_hour_mm = _int_value(results[0])
+                rain_today_mm = _int_value(results[1])
     except Exception as ex:
         _log_exception_to_file(ex)
     print("Last hour %dmm, today %dmm" % (rain_last_hour_mm, rain_today_mm))
@@ -159,38 +169,26 @@ def _read_weather():
 def _read_forecast():
     rain_today_mm, rain_tomorrow_mm = (0, 0)
     try:
-        json = _request_json(_FORECAST_URL, object='qpf_allday')
-        if json is not None:
-            rain_today_mm = _int_value(json[0]['qpf_allday']['mm'])
-            rain_tomorrow_mm = _int_value(json[1]['qpf_allday']['mm'])
+        previous = b''
+        results = []
+        for chunk in urequests.get(_FORECAST_URL):
+            gc.collect()
+            part = previous + chunk
+            match = forecast_regex.search(part.decode('UTF-8'))
+            if match is not None:
+                results.append(match.group(1))
+                previous = b''
+            else:
+                previous = chunk
+            if len(results) == 2:
+                break
+
+        rain_today_mm = _int_value(results[0])
+        rain_tomorrow_mm = _int_value(results[1])
     except Exception as ex:
         _log_exception_to_file(ex)
     print("Today %dmm, tomorrow %dmm" % (rain_today_mm, rain_tomorrow_mm))
     return rain_today_mm, rain_tomorrow_mm
-
-
-def _request_json(url, object=None, attributes=None):
-    response = None
-    json = None
-    gc.collect()
-    try:
-        _log_message("Req to: %s" % url)
-        response = urequests.get(url)
-        _log_message("Resp received: %d" % response.status_code)
-        if response.status_code == 200:
-            if attributes is None and object is None:
-                json = response.json()
-            elif object is not None:
-                json = response.json_objects(object)
-            elif attributes is not None:
-                json = response.json_attributes(attributes)
-    finally:
-        _log_message("Req completed")
-        if response is not None:
-            response.close()
-            _log_message("Resp closed")
-    gc.collect()
-    return json
 
 
 def _int_value(attribute):
@@ -233,14 +231,16 @@ def _sleep_enabled():
 
 
 def _log_message(message):
-    with io.open('system.log', mode='wa') as log_file:
-        log_file.write('%s - %s\n' % (_datetime_str(), message))
+    if DEBUG:
+        with io.open('system.log', mode='wa') as log_file:
+            log_file.write('%s - %s\n' % (_datetime_str(), message))
 
 
 def _log_exception_to_file(ex):
-    with io.open('system.log', mode='wa') as log_file:
-        log_file.write('%s\n' % _datetime_str())
-        sys.print_exception(ex, log_file)
+    if DEBUG:
+        with io.open('system.log', mode='wa') as log_file:
+            log_file.write('%s\n' % _datetime_str())
+            sys.print_exception(ex, log_file)
 
 
 def _datetime_str():
