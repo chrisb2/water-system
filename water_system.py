@@ -56,7 +56,7 @@ def run():
         if wifi.connect():
             _log_message('WIFI connected')
             rain_last_hour_mm, rain_today_mm = _read_weather()
-            rain_forecast_today_mm, rain_forecast_tomorrow_mm = _read_forecast()
+            rain_forecast_today_mm, rain_forecast_tomorrow_mm = _read_forecast_with_retry()
 
             rainfall = (rain_today_mm > 3 or rain_last_hour_mm > 1
                         or rain_forecast_today_mm > 1)
