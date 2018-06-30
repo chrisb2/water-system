@@ -20,3 +20,9 @@ ADC_REF = 1165
 RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, 0, None, None)
 # Every minute
 # RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, None, 0, None)
+
+# Std Micropython
+I2C_PERIPHERAL = -1
+
+# Loboris MicroPython
+# I2C_PERIPHERAL = 1

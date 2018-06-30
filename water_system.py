@@ -1,5 +1,5 @@
 """Monitor local rainfall and disable garden watering system if required."""
-import urequests
+import urequests as requests
 from machine import Pin, ADC
 import machine
 import utime
@@ -38,8 +38,8 @@ _FORECAST_URL = \
    'http://api.wunderground.com/api/{}/geolookup/forecast/q/{}.json'.format(
        secrets.WUNDERGROUND_API_KEY, config.WUNDERGROUND_LOCATION)
 
-i2c = machine.I2C(1, sda=SDA_PIN, scl=SCL_PIN)
-weather_regex = ure.compile('precip.*metric\":\"([ ,0-9]*)\"')
+i2c = machine.I2C(config.I2C_PERIPHERAL, sda=SDA_PIN, scl=SCL_PIN)
+weather_regex = ure.compile('precip.*metric\":\" ?(([0-9]*[.])?[0-9]+)\"')
 forecast_regex = ure.compile('qpf_allday.*\n.*\n\s*\"mm\":([ ,0-9]*)\n')
 
 
@@ -141,52 +141,71 @@ def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
                                  rain_forecast_today_mm, battery_volts,
                                  int(not system_off))
     response = None
-    try:
-        response = urequests.get(url)
-    finally:
-        if response is not None:
-            response.close()
+    _log_message('Req to: %s' % url)
+    with requests.get(url) as response:
+        _log_message('HTTP status: %d' % response.status_code)
 
 
 def _read_weather():
     rain_last_hour_mm, rain_today_mm = (0, 0)
+    _log_message('Req to: %s' % _WEATHER_URL)
     try:
         results = []
-        with urequests.get(_WEATHER_URL) as response:
+        with requests.get(_WEATHER_URL) as response:
+            _log_message('HTTP status: %d' % response.status_code)
             if response.status_code == 200:
                 for line in response.iter_lines():
+                    gc.collect()
                     match = weather_regex.search(line.decode('UTF-8'))
                     if match is not None:
                         results.append(match.group(1))
-                rain_last_hour_mm = _int_value(results[0])
-                rain_today_mm = _int_value(results[1])
+                    if len(results) == 2:
+                        rain_last_hour_mm = _int_value(results[0])
+                        rain_today_mm = _int_value(results[1])
+                        break
+
     except Exception as ex:
         _log_exception_to_file(ex)
     print("Last hour %dmm, today %dmm" % (rain_last_hour_mm, rain_today_mm))
     return rain_last_hour_mm, rain_today_mm
 
 
+def _read_forecast_with_retry():
+    success = False
+    tries = 2
+    result = (0, 0)
+    while (not success and tries > 0):
+        try:
+            result = _read_forecast()
+            success = True
+        except Exception as ex:
+            _log_exception_to_file(ex)
+            tries = tries - 1
+    return result
+
+
 def _read_forecast():
     rain_today_mm, rain_tomorrow_mm = (0, 0)
-    try:
-        previous = b''
-        results = []
-        for chunk in urequests.get(_FORECAST_URL):
-            gc.collect()
-            part = previous + chunk
-            match = forecast_regex.search(part.decode('UTF-8'))
-            if match is not None:
-                results.append(match.group(1))
-                previous = b''
-            else:
-                previous = chunk
-            if len(results) == 2:
-                break
+    _log_message('Req to: %s' % _FORECAST_URL)
 
-        rain_today_mm = _int_value(results[0])
-        rain_tomorrow_mm = _int_value(results[1])
-    except Exception as ex:
-        _log_exception_to_file(ex)
+    previous = b''
+    results = []
+    for chunk in requests.get(_FORECAST_URL):
+        gc.collect()
+        # _log_message("c")
+        part = previous + chunk
+        match = forecast_regex.search(part.decode('UTF-8'))
+        # json can contain null values for qpf_allday -> mm
+        if match is not None:
+            results.append(match.group(1))
+            previous = b''
+        else:
+            previous = chunk
+        if len(results) == 2:
+            rain_today_mm = _int_value(results[0])
+            rain_tomorrow_mm = _int_value(results[1])
+            break
+
     print("Today %dmm, tomorrow %dmm" % (rain_today_mm, rain_tomorrow_mm))
     return rain_today_mm, rain_tomorrow_mm
 
