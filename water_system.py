@@ -41,6 +41,10 @@ _FORECAST_URL = \
 i2c = machine.I2C(config.I2C_PERIPHERAL, sda=SDA_PIN, scl=SCL_PIN)
 weather_regex = ure.compile('precip.*metric\":\" ?(([0-9]*[.])?[0-9]+)\"')
 forecast_regex = ure.compile('qpf_allday.*\n.*\n\s*\"mm\":([ ,0-9]*)\n')
+forecast_simple = ure.compile('simpleforecast')
+forecast_period = ure.compile('period\":(\d)')
+forecast_qpf = ure.compile('qpf_allday')
+forecast_mm = ure.compile('\"mm\":([ ,0-9]*)')
 
 
 def run():
@@ -172,15 +176,16 @@ def _read_weather():
 
 def _read_forecast_with_retry():
     success = False
-    tries = 2
+    tries = 3
     result = (0, 0)
     while (not success and tries > 0):
         try:
-            result = _read_forecast()
+            result = _read_forecast2()
             success = True
         except Exception as ex:
             _log_exception_to_file(ex)
             tries = tries - 1
+            utime.sleep(1)
     return result
 
 
@@ -194,7 +199,7 @@ def _read_forecast():
         gc.collect()
         # _log_message("c")
         part = previous + chunk
-        match = forecast_regex.search(part.decode('UTF-8'))
+        match = forecast_regex.search(part.decode('UTF-8', 'ignore'))
         # json can contain null values for qpf_allday -> mm
         if match is not None:
             results.append(match.group(1))
@@ -205,6 +210,49 @@ def _read_forecast():
             rain_today_mm = _int_value(results[0])
             rain_tomorrow_mm = _int_value(results[1])
             break
+
+    print("Today %dmm, tomorrow %dmm" % (rain_today_mm, rain_tomorrow_mm))
+    return rain_today_mm, rain_tomorrow_mm
+
+
+def _read_forecast2():
+    rain_today_mm, rain_tomorrow_mm = (0, 0)
+    _log_message('Req to: %s' % _FORECAST_URL)
+
+    simple = False
+    qpf_allday = False
+    period_num = 0
+    results = {}
+    with requests.get(_FORECAST_URL) as response:
+        if response.status_code == 200:
+            for line in response.iter_lines():
+                gc.collect()
+
+                text = line.decode('utf-8', 'ignore').strip()
+                match_simple = forecast_simple.search(text)
+
+                if not simple:
+                    if match_simple is not None:
+                        simple = True
+                else:
+                    match_period = forecast_period.search(text)
+                    if match_period is not None:
+                        period_num = int(match_period.group(1))
+                    else:
+                        match_qpf = forecast_qpf.search(text)
+                        match_mm = forecast_mm.search(text)
+
+                    if qpf_allday and match_mm is not None:
+                        results[period_num] = match_mm.group(1)
+                        _log_message("%d - %s - %s" % (period_num, text, results[period_num]))
+                        qpf_allday = False
+                    elif not qpf_allday and match_qpf is not None:
+                        qpf_allday = True
+
+                    if len(results) == 2:
+                        rain_today_mm = _int_value(results[1])
+                        rain_tomorrow_mm = _int_value(results[2])
+                        break
 
     print("Today %dmm, tomorrow %dmm" % (rain_today_mm, rain_tomorrow_mm))
     return rain_today_mm, rain_tomorrow_mm
