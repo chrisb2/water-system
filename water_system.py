@@ -38,6 +38,8 @@ _FORECAST_URL = \
    'http://api.wunderground.com/api/{}/geolookup/forecast/q/{}.json'.format(
        secrets.WUNDERGROUND_API_KEY, config.WUNDERGROUND_LOCATION)
 
+_RETRY_INTERVAL = 2  # second(s)
+
 i2c = machine.I2C(config.I2C_PERIPHERAL, sda=SDA_PIN, scl=SCL_PIN)
 weather_regex = ure.compile('precip.*metric\":\" ?(([0-9]*[.])?[0-9]+)\"')
 forecast_regex = ure.compile('qpf_allday.*\n.*\n\s*\"mm\":([ ,0-9]*)\n')
@@ -59,15 +61,15 @@ def run():
         battery_volts = _battery_voltage()
         if wifi.connect():
             _log_message('WIFI connected')
-            rain_last_hour_mm, rain_today_mm = _read_weather()
+            rain_last_hour_mm, rain_today_mm = _read_weather_with_retry()
             rain_forecast_today_mm, rain_forecast_tomorrow_mm = _read_forecast_with_retry()
 
             rainfall = (rain_today_mm > 3 or rain_last_hour_mm > 1
                         or rain_forecast_today_mm > 1)
 
-            _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
-                                rain_forecast_today_mm, battery_volts,
-                                rainfall)
+            _send_to_thingspeak_with_retry(rain_last_hour_mm, rain_today_mm,
+                                           rain_forecast_today_mm,
+                                           battery_volts, rainfall)
 
         if rainfall:
             _log_message('System OFF')
@@ -138,38 +140,70 @@ def _configure_rtc_alarm(alarm_time):
     rtc.alarm_time(alarm_time, alarm=1)  # Configure alarm time of RTC
 
 
+def _send_to_thingspeak_with_retry(rain_last_hour_mm, rain_today_mm,
+                                   rain_forecast_today_mm, battery_volts,
+                                   system_off):
+    success = False
+    tries = 3
+    while (not success and tries > 0):
+        try:
+            _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
+                                rain_forecast_today_mm, battery_volts,
+                                system_off)
+            success = True
+        except Exception as ex:
+            _log_exception_to_file(ex)
+            tries = tries - 1
+            utime.sleep(_RETRY_INTERVAL)
+
+
 def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
                         rain_forecast_today_mm, battery_volts, system_off):
     url = _THINGSPEAK_URL.format(secrets.THINGSPEAK_API_KEY,
                                  rain_last_hour_mm, rain_today_mm,
                                  rain_forecast_today_mm, battery_volts,
                                  int(not system_off))
-    response = None
     _log_message('Req to: %s' % url)
     with requests.get(url) as response:
         _log_message('HTTP status: %d' % response.status_code)
+        if response.status_code != 200:
+            raise ValueError("HTTP status %d" % response.status_code)
+
+
+def _read_weather_with_retry():
+    success = False
+    tries = 3
+    result = (0, 0)
+    while (not success and tries > 0):
+        try:
+            result = _read_weather()
+            success = True
+        except Exception as ex:
+            _log_exception_to_file(ex)
+            tries = tries - 1
+            utime.sleep(_RETRY_INTERVAL)
+    return result
 
 
 def _read_weather():
     rain_last_hour_mm, rain_today_mm = (0, 0)
     _log_message('Req to: %s' % _WEATHER_URL)
-    try:
-        results = []
-        with requests.get(_WEATHER_URL) as response:
-            _log_message('HTTP status: %d' % response.status_code)
-            if response.status_code == 200:
-                for line in response.iter_lines():
-                    gc.collect()
-                    match = weather_regex.search(line.decode('UTF-8'))
-                    if match is not None:
-                        results.append(match.group(1))
-                    if len(results) == 2:
-                        rain_last_hour_mm = _int_value(results[0])
-                        rain_today_mm = _int_value(results[1])
-                        break
+    results = []
+    with requests.get(_WEATHER_URL) as response:
+        _log_message('HTTP status: %d' % response.status_code)
+        if response.status_code == 200:
+            for line in response.iter_lines():
+                gc.collect()
+                match = weather_regex.search(line.decode('UTF-8'))
+                if match is not None:
+                    results.append(match.group(1))
+                if len(results) == 2:
+                    rain_last_hour_mm = _int_value(results[0])
+                    rain_today_mm = _int_value(results[1])
+                    break
+        else:
+            raise ValueError("HTTP status %d" % response.status_code)
 
-    except Exception as ex:
-        _log_exception_to_file(ex)
     print("Last hour %dmm, today %dmm" % (rain_last_hour_mm, rain_today_mm))
     return rain_last_hour_mm, rain_today_mm
 
@@ -180,42 +214,16 @@ def _read_forecast_with_retry():
     result = (0, 0)
     while (not success and tries > 0):
         try:
-            result = _read_forecast2()
+            result = _read_forecast()
             success = True
         except Exception as ex:
             _log_exception_to_file(ex)
             tries = tries - 1
-            utime.sleep(1)
+            utime.sleep(_RETRY_INTERVAL)
     return result
 
 
 def _read_forecast():
-    rain_today_mm, rain_tomorrow_mm = (0, 0)
-    _log_message('Req to: %s' % _FORECAST_URL)
-
-    previous = b''
-    results = []
-    for chunk in requests.get(_FORECAST_URL):
-        gc.collect()
-        # _log_message("c")
-        part = previous + chunk
-        match = forecast_regex.search(part.decode('UTF-8', 'ignore'))
-        # json can contain null values for qpf_allday -> mm
-        if match is not None:
-            results.append(match.group(1))
-            previous = b''
-        else:
-            previous = chunk
-        if len(results) == 2:
-            rain_today_mm = _int_value(results[0])
-            rain_tomorrow_mm = _int_value(results[1])
-            break
-
-    print("Today %dmm, tomorrow %dmm" % (rain_today_mm, rain_tomorrow_mm))
-    return rain_today_mm, rain_tomorrow_mm
-
-
-def _read_forecast2():
     rain_today_mm, rain_tomorrow_mm = (0, 0)
     _log_message('Req to: %s' % _FORECAST_URL)
 
@@ -224,6 +232,7 @@ def _read_forecast2():
     period_num = 0
     results = {}
     with requests.get(_FORECAST_URL) as response:
+        _log_message('HTTP status: %d' % response.status_code)
         if response.status_code == 200:
             for line in response.iter_lines():
                 gc.collect()
@@ -253,6 +262,11 @@ def _read_forecast2():
                         rain_today_mm = _int_value(results[1])
                         rain_tomorrow_mm = _int_value(results[2])
                         break
+
+            if len(results) != 2:
+                raise ValueError("Only %d values found" % len(results))
+        else:
+            raise ValueError("HTTP status %d" % response.status_code)
 
     print("Today %dmm, tomorrow %dmm" % (rain_today_mm, rain_tomorrow_mm))
     return rain_today_mm, rain_tomorrow_mm
