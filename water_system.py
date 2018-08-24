@@ -144,7 +144,7 @@ def _send_to_thingspeak_with_retry(rain_last_hour_mm, rain_today_mm,
                                    rain_forecast_today_mm, battery_volts,
                                    system_off):
     success = False
-    tries = 3
+    tries = 4
     while (not success and tries > 0):
         try:
             _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
@@ -210,7 +210,7 @@ def _read_weather():
 
 def _read_forecast_with_retry():
     success = False
-    tries = 3
+    tries = 6
     result = (0, 0)
     while (not success and tries > 0):
         try:
