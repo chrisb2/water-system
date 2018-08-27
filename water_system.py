@@ -6,13 +6,12 @@ import utime
 import urtc
 import ure
 import io
-import sys
 import gc
 import wifi
 import secrets
 import config
-
-DEBUG = True
+import logging
+from retrier import retry
 
 WAKEUP_PIN = Pin(4, Pin.IN, Pin.PULL_UP)
 SCL_PIN = Pin(17)
@@ -38,8 +37,6 @@ _FORECAST_URL = \
    'http://api.wunderground.com/api/{}/geolookup/forecast/q/{}.json'.format(
        secrets.WUNDERGROUND_API_KEY, config.WUNDERGROUND_LOCATION)
 
-_RETRY_INTERVAL = 2  # second(s)
-
 i2c = machine.I2C(config.I2C_PERIPHERAL, sda=SDA_PIN, scl=SCL_PIN)
 weather_regex = ure.compile('precip.*metric\":\" ?(([0-9]*[.])?[0-9]+)\"')
 forecast_regex = ure.compile('qpf_allday.*\n.*\n\s*\"mm\":([ ,0-9]*)\n')
@@ -48,51 +45,57 @@ forecast_period = ure.compile('period\":(\d)')
 forecast_qpf = ure.compile('qpf_allday')
 forecast_mm = ure.compile('\"mm\":([ ,0-9]*)')
 
+_stream = None
+_log = None
+
 
 def run():
     """Main entry point to execute this program."""
-    # Set variable so that system defaults to ON avoiding garden never being
-    # watered if execution repeatedly fails.
     try:
-        _log_message('Running')
+        global _log
+        _log = _initialize_logger()
+        _log.info('%s - Running', _timestamp())
         rainfall = False
         sleep_enabled = _sleep_enabled()
 
         battery_volts = _battery_voltage()
         if wifi.connect():
-            _log_message('WIFI connected')
-            rain_last_hour_mm, rain_today_mm = _read_weather_with_retry()
-            rain_forecast_today_mm, rain_forecast_tomorrow_mm = _read_forecast_with_retry()
+            _log.info('%s - WIFI connected', _timestamp())
+            rain_last_hour_mm, rain_today_mm = _read_weather()
+            rain_forecast_today_mm, rain_forecast_tomorrow_mm = \
+                _read_forecast()
 
             rainfall = (rain_today_mm > 3 or rain_last_hour_mm > 1
                         or rain_forecast_today_mm > 1)
 
-            _send_to_thingspeak_with_retry(rain_last_hour_mm, rain_today_mm,
-                                           rain_forecast_today_mm,
-                                           battery_volts, rainfall)
+            _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
+                                rain_forecast_today_mm,
+                                battery_volts, rainfall)
 
         if rainfall:
-            _log_message('System OFF')
+            _log.info('%s - System OFF', _timestamp())
             _system_off()
         else:
-            _log_message('System ON')
+            _log.info('%s - System ON', _timestamp())
             _system_on()
 
     except Exception as ex:
         # Catch exceptions so that device goes back to sleep if WiFi connect or
         # HTTP calls fail with exceptions
-        # pass
-        _log_exception_to_file(ex)
+        _log.exc(ex, '%s', _timestamp())
     finally:
         try:
             wifi.disconnect()
-            _log_message('WIFI disconnected')
+            _log.info('%s - WIFI disconnected', _timestamp())
         except Exception as ex:
-            _log_exception_to_file(ex)
+            _log.exc(ex, '%s', _timestamp())
 
         if sleep_enabled:
-            _log_message('Sleeping...')
+            _log.info('%s - Sleeping...', _timestamp())
+            _close_logger()
             _sleep_until(config.RTC_ALARM)
+        else:
+            _close_logger()
 
 
 def datetime():
@@ -140,57 +143,27 @@ def _configure_rtc_alarm(alarm_time):
     rtc.alarm_time(alarm_time, alarm=1)  # Configure alarm time of RTC
 
 
-def _send_to_thingspeak_with_retry(rain_last_hour_mm, rain_today_mm,
-                                   rain_forecast_today_mm, battery_volts,
-                                   system_off):
-    success = False
-    tries = 4
-    while (not success and tries > 0):
-        try:
-            _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
-                                rain_forecast_today_mm, battery_volts,
-                                system_off)
-            success = True
-        except Exception as ex:
-            _log_exception_to_file(ex)
-            tries = tries - 1
-            utime.sleep(_RETRY_INTERVAL)
-
-
+@retry(Exception, tries=5, delay=2, backoff=1.5, logger=_log)
 def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
                         rain_forecast_today_mm, battery_volts, system_off):
     url = _THINGSPEAK_URL.format(secrets.THINGSPEAK_API_KEY,
                                  rain_last_hour_mm, rain_today_mm,
                                  rain_forecast_today_mm, battery_volts,
                                  int(not system_off))
-    _log_message('Req to: %s' % url)
+    _log.info('%s - Req to: %s',  _timestamp(), url)
     with requests.get(url) as response:
-        _log_message('HTTP status: %d' % response.status_code)
+        _log.info('%s - HTTP status: %d', _timestamp(), response.status_code)
         if response.status_code != 200:
             raise ValueError("HTTP status %d" % response.status_code)
 
 
-def _read_weather_with_retry():
-    success = False
-    tries = 3
-    result = (0, 0)
-    while (not success and tries > 0):
-        try:
-            result = _read_weather()
-            success = True
-        except Exception as ex:
-            _log_exception_to_file(ex)
-            tries = tries - 1
-            utime.sleep(_RETRY_INTERVAL)
-    return result
-
-
+@retry(Exception, tries=5, delay=2, backoff=1.5, logger=_log)
 def _read_weather():
     rain_last_hour_mm, rain_today_mm = (0, 0)
-    _log_message('Req to: %s' % _WEATHER_URL)
+    _log.info('%s - Req to: %s', _timestamp(), _WEATHER_URL)
     results = []
     with requests.get(_WEATHER_URL) as response:
-        _log_message('HTTP status: %d' % response.status_code)
+        _log.info('%s - HTTP status: %d', _timestamp(), response.status_code)
         if response.status_code == 200:
             for line in response.iter_lines():
                 gc.collect()
@@ -208,31 +181,17 @@ def _read_weather():
     return rain_last_hour_mm, rain_today_mm
 
 
-def _read_forecast_with_retry():
-    success = False
-    tries = 6
-    result = (0, 0)
-    while (not success and tries > 0):
-        try:
-            result = _read_forecast()
-            success = True
-        except Exception as ex:
-            _log_exception_to_file(ex)
-            tries = tries - 1
-            utime.sleep(_RETRY_INTERVAL)
-    return result
-
-
+@retry(Exception, tries=5, delay=2, backoff=1.5, logger=_log)
 def _read_forecast():
     rain_today_mm, rain_tomorrow_mm = (0, 0)
-    _log_message('Req to: %s' % _FORECAST_URL)
+    _log.info('%s - Req to: %s', _timestamp(), _FORECAST_URL)
 
     simple = False
     qpf_allday = False
     period_num = 0
     results = {}
     with requests.get(_FORECAST_URL) as response:
-        _log_message('HTTP status: %d' % response.status_code)
+        _log.info('%s - HTTP status: %d', _timestamp(), response.status_code)
         if response.status_code == 200:
             for line in response.iter_lines():
                 gc.collect()
@@ -253,7 +212,8 @@ def _read_forecast():
 
                     if qpf_allday and match_mm is not None:
                         results[period_num] = match_mm.group(1)
-                        _log_message("%d - %s - %s" % (period_num, text, results[period_num]))
+                        _log.info("%s - %d, %s, %s", _timestamp(), period_num,
+                                  text, results[period_num])
                         qpf_allday = False
                     elif not qpf_allday and match_qpf is not None:
                         qpf_allday = True
@@ -311,18 +271,20 @@ def _sleep_enabled():
     return NO_SLEEP_PIN.value() == 0
 
 
-def _log_message(message):
-    if DEBUG:
-        with io.open('system.log', mode='wa') as log_file:
-            log_file.write('%s - %s\n' % (_datetime_str(), message))
+def _timestamp():
+    dt = datetime()
+    return '%d-%02d-%02d %02d:%02d:%02d' % \
+           (dt[0], dt[1], dt[2], dt[4], dt[5], dt[6])
 
 
-def _log_exception_to_file(ex):
-    if DEBUG:
-        with io.open('system.log', mode='wa') as log_file:
-            log_file.write('%s\n' % _datetime_str())
-            sys.print_exception(ex, log_file)
+def _initialize_logger():
+    global _stream
+    _stream = io.open('system.log', mode='wa')
+    logging.basicConfig(level=logging.INFO, stream=_stream)
+    return logging.getLogger("system")
 
 
-def _datetime_str():
-    return '-'.join(map(str, datetime()))
+def _close_logger():
+    global _stream
+    if _stream is not None:
+        _stream.close()
