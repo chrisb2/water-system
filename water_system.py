@@ -170,10 +170,14 @@ def _read_weather():
                 match = weather_regex.search(line.decode('UTF-8'))
                 if match is not None:
                     results.append(match.group(1))
+                    _log.info("%s - %s", _timestamp(), match.group(1))
                 if len(results) == 2:
                     rain_last_hour_mm = _int_value(results[0])
                     rain_today_mm = _int_value(results[1])
                     break
+
+            if len(results) != 2:
+                raise ValueError("Only %d values found" % len(results))
         else:
             raise ValueError("HTTP status %d" % response.status_code)
 
