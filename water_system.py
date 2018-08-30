@@ -237,14 +237,14 @@ def _read_forecast():
 
 
 def _int_value(attribute):
-    """Convert to int, coerce invalid values ('--', '-9999.00') to zero."""
-    try:
-        val = int(attribute)
-        if val < 0:
-            val = 0
-        return val
-    except (ValueError, TypeError):
-        return 0
+    """Convert to int.
+
+    Invalid values ('--', '-9999.00', etc) cause ValueError or TypeError
+    """
+    val = int(attribute)
+    if val < 0:
+        raise ValueError("Negative value: %d" % val)
+    return val
 
 
 def _system_on():
