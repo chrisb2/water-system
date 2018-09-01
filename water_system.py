@@ -29,7 +29,7 @@ ADC_READS = 100
 
 _THINGSPEAK_URL = (
     'https://api.thingspeak.com/update'
-    '?api_key={}&field1={}&field2={}&field3={}&field4={}&field5={}')
+    '?api_key={}&field1={}&field2={}&field3={}&field4={}&field5={}&field6={}')
 _WEATHER_URL = \
    'http://api.wunderground.com/api/{}/conditions/q{}.json'.format(
        secrets.WUNDERGROUND_API_KEY, config.WUNDERGROUND_STATION)
@@ -70,6 +70,7 @@ def run():
 
             _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
                                 rain_forecast_today_mm,
+                                rain_forecast_tomorrow_mm,
                                 battery_volts, rainfall)
 
         if rainfall:
@@ -145,11 +146,13 @@ def _configure_rtc_alarm(alarm_time):
 
 @retry(Exception, tries=5, delay=2, backoff=1.5, logger=_log)
 def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
-                        rain_forecast_today_mm, battery_volts, system_off):
+                        rain_forecast_today_mm, rain_forecast_tomorrow_mm,
+                        battery_volts, system_off):
     url = _THINGSPEAK_URL.format(secrets.THINGSPEAK_API_KEY,
                                  rain_last_hour_mm, rain_today_mm,
-                                 rain_forecast_today_mm, battery_volts,
-                                 int(not system_off))
+                                 rain_forecast_today_mm,
+                                 rain_forecast_tomorrow_mm,
+                                 battery_volts, int(not system_off))
     _log.info('%s - Req to: %s',  _timestamp(), url)
     with requests.get(url) as response:
         _log.info('%s - HTTP status: %d', _timestamp(), response.status_code)
