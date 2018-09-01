@@ -63,7 +63,8 @@ def run():
                 _read_forecast()
 
             rainfall = (rain_today_mm > 3 or rain_last_hour_mm > 1
-                        or rain_forecast_today_mm > 1)
+                        or rain_forecast_today_mm > 1
+                        or rain_forecast_tomorrow_mm > 4)
 
             _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
                                 rain_forecast_today_mm,
