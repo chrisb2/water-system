@@ -158,7 +158,7 @@ def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
             raise ValueError("HTTP status %d" % response.status_code)
 
 
-@retry(Exception, tries=5, delay=2, backoff=1.5, logger=_log)
+@retry(Exception, tries=5, delay=2, backoff=2, logger=_log)
 def _read_weather():
     rain_last_hour_mm, rain_today_mm = (0, 0)
     _log.info('%s - Req to: %s', _timestamp(), _WEATHER_URL)
