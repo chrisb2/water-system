@@ -50,6 +50,7 @@ def run():
     """Main entry point to execute this program."""
     try:
         global _log
+        machine.setWDT()
         _log = _initialize_logger()
         _log.info('%s - Running', _timestamp())
         rainfall = False
@@ -146,6 +147,7 @@ def _configure_rtc_alarm(alarm_time):
 def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
                         rain_forecast_today_mm, rain_forecast_tomorrow_mm,
                         battery_volts, system_off):
+    machine.resetWDT()
     url = _THINGSPEAK_URL.format(secrets.THINGSPEAK_API_KEY,
                                  rain_last_hour_mm, rain_today_mm,
                                  rain_forecast_today_mm,
@@ -160,6 +162,7 @@ def _send_to_thingspeak(rain_last_hour_mm, rain_today_mm,
 
 @retry(Exception, tries=5, delay=2, backoff=2, logger=_log)
 def _read_weather():
+    machine.resetWDT()
     rain_last_hour_mm, rain_today_mm = (0, 0)
     _log.info('%s - Req to: %s', _timestamp(), _WEATHER_URL)
     results = []
@@ -188,6 +191,7 @@ def _read_weather():
 
 @retry(Exception, tries=5, delay=2, backoff=1.5, logger=_log)
 def _read_forecast():
+    machine.resetWDT()
     rain_today_mm, rain_tomorrow_mm = (0, 0)
     _log.info('%s - Req to: %s', _timestamp(), _FORECAST_URL)
 
