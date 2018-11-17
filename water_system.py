@@ -17,22 +17,15 @@ def run():
                            machine.wake_description())
         rainfall = False
         sleep_enabled = _sleep_enabled()
-
         battery_volts = _battery_voltage()
+
         if wifi.connect():
             File.logger().info('%s - WIFI connected', clock.timestamp())
-            rain_last_hour_mm, rain_today_mm = weather.read_weather()
-            rain_forecast_today_mm, rain_forecast_tomorrow_mm = \
-                weather.read_forecast()
+            rain_data = weather.get_rain_data()
+            rainfall = rain_data.rainfall_occurring()
+            thingspeak.send(rain_data, battery_volts)
 
-            rainfall = (rain_today_mm > 3 or rain_last_hour_mm > 1
-                        or rain_forecast_today_mm > 1
-                        or rain_forecast_tomorrow_mm > 4)
-
-            thingspeak.send(rain_last_hour_mm, rain_today_mm,
-                            rain_forecast_today_mm, rain_forecast_tomorrow_mm,
-                            battery_volts, rainfall)
-
+        # If WIFI connect fails, system will default to ON.
         if rainfall:
             File.logger().info('%s - System OFF', clock.timestamp())
             _system_off()
@@ -42,7 +35,7 @@ def run():
 
     except Exception as ex:
         # Catch exceptions so that device goes back to sleep if WiFi connect or
-        # HTTP calls fail with exceptions
+        # HTTP calls fail with exceptions.
         File.logger().exc(ex, '%s - Error', clock.timestamp())
     finally:
         try:

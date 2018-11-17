@@ -6,22 +6,20 @@ from file_logger import File
 import secrets
 import clock
 
-_THINGSPEAK_URL = (
+_URL = (
     'https://api.thingspeak.com/update'
-    '?api_key={}&field1={}&field2={}&field3={}&field4={}&field5={}&field6={}')
+    '?api_key={key}&field1={}&field2={}&field3={}&field4={}'
+    '&field5={volts}&field6={status}')
 
 
 @retry(Exception, tries=5, delay=2, backoff=2.0, logger=File.logger())
-def send(rain_last_hour_mm, rain_today_mm,
-         rain_forecast_today_mm, rain_forecast_tomorrow_mm,
-         battery_volts, system_off):
+def send(rain_data, battery_volts):
     """Send weather and system information to Thingspeak."""
     machine.resetWDT()
-    url = _THINGSPEAK_URL.format(secrets.THINGSPEAK_API_KEY,
-                                 rain_last_hour_mm, rain_today_mm,
-                                 rain_forecast_today_mm,
-                                 rain_forecast_tomorrow_mm,
-                                 battery_volts, int(not system_off))
+    data_tuple = rain_data.get_data()
+    url = _URL.format(key=secrets.THINGSPEAK_API_KEY,
+                      *data_tuple, volts=battery_volts,
+                      status=int(not rain_data.rainfall_occurring()))
     File.logger().info('%s - Req to: %s', clock.timestamp(), url)
     with requests.get(url) as response:
         File.logger().info('%s - HTTP status: %d', clock.timestamp(),

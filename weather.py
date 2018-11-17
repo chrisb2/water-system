@@ -21,6 +21,44 @@ forecast_qpf = ure.compile('qpf_allday')
 forecast_mm = ure.compile('\"mm\":([ ,0-9]*)')
 
 
+class RainData:
+    """Holds current and forecast rain data."""
+
+    def __init__(self):
+        """Constructor."""
+        self.rain_last_hour_mm = 0
+        self.rain_today_mm = 0
+        self.rain_today_mm = 0
+        self.rain_tomorrow_mm = 0
+
+    def rainfall_occurring(self):
+        """Return True if the data indicated that rain has or will occur."""
+        return (self.rain_today_mm > 3 or self.rain_last_hour_mm > 1
+                or self.rain_forecast_today_mm > 1
+                or self.rain_forecast_tomorrow_mm > 4)
+
+    def get_data(self):
+        """Return rain data as a tuple."""
+        return (self.rain_last_hour_mm, self.rain_today_mm,
+                self.rain_forecast_today_mm, self.rain_forecast_tomorrow_mm)
+
+    def set_from_weather(self, weather):
+        """Set rain data from current weather."""
+        self.rain_last_hour_mm, self.rain_today_mm = weather
+
+    def set_from_forecast(self, forecast):
+        """Set rain data from forecast."""
+        self.rain_forecast_today_mm, self.rain_forecast_tomorrow_mm = forecast
+
+
+def get_rain_data():
+    """Get the rain data retrieved from the weather service."""
+    data = RainData()
+    data.set_from_weather(read_weather())
+    data.set_from_forecast(read_forecast())
+    return data
+
+
 @retry(Exception, tries=5, delay=2, backoff=2, logger=File.logger())
 def read_weather():
     """Read the current weather."""
