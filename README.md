@@ -6,7 +6,7 @@ significant rain has fallen in the last day, or is forecast today, and if so
 disables the garden watering system to conserve water. It reports the rainfall
 and system status to [ThingSpeak](https://thingspeak.com).
 
-The code depends on the Loboris fork of [MicroPython for ESP32](https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo). The 'esp32' firmware required can be [downloaded here](https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo/wiki/firmwares).
+The code depends on my personal fork of [Loboris MicroPython for ESP32](https://github.com/chrisb2/MicroPython_ESP32_psRAM_LoBo).
 
 The project is run off a single 1600mAh LiFePO4 battery (18650) and uses the deep sleep mode of the ESP32 to
 extend the battery life.
@@ -50,7 +50,7 @@ WUNDERGROUND_LOCATION = 'zmw:00000.7.93781'
 ```
 By default the RTC will wake the ESP32 from deep sleep at 5am GMT every day, if
 you want a different time edit the value of the _RTC_ALARM_ constant in
-_water_system.py_.
+_config.py_.
 
 Copy all the python files to the ESP32.
 
