@@ -1,8 +1,8 @@
 """Real time clock (RTC) utility."""
 import machine
-import config
 import utime
 import urtc
+import config
 
 _i2c = machine.I2C(config.I2C_PERIPHERAL,
                    sda=config.SDA_PIN, scl=config.SCL_PIN)

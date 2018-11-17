@@ -1,13 +1,13 @@
 """Weather query module."""
-import config
-import secrets
-import gc
 import machine
 import ure
-import urequests as requests
+import gc
 from retrier import retry
+import urequests as requests
+from file_logger import File
+import config
+import secrets
 import clock
-import file_logger
 
 _WEATHER_URL = \
    'http://api.wunderground.com/api/{}/conditions/q{}.json'.format(
@@ -21,24 +21,24 @@ forecast_qpf = ure.compile('qpf_allday')
 forecast_mm = ure.compile('\"mm\":([ ,0-9]*)')
 
 
-@retry(Exception, tries=5, delay=2, backoff=2, logger=file_logger.LOG)
+@retry(Exception, tries=5, delay=2, backoff=2, logger=File.logger())
 def read_weather():
     """Read the current weather."""
     machine.resetWDT()
     rain_last_hour_mm, rain_today_mm = (0, 0)
-    file_logger.LOG.info('%s - Req to: %s', clock.timestamp(), _WEATHER_URL)
+    File.logger().info('%s - Req to: %s', clock.timestamp(), _WEATHER_URL)
     results = []
     with requests.get(_WEATHER_URL) as response:
-        file_logger.LOG.info('%s - HTTP status: %d', clock.timestamp(),
-                             response.status_code)
+        File.logger().info('%s - HTTP status: %d', clock.timestamp(),
+                           response.status_code)
         if response.status_code == 200:
             for line in response.iter_lines():
                 gc.collect()
                 match = weather_regex.search(line.decode('UTF-8'))
                 if match is not None:
                     results.append(match.group(1))
-                    file_logger.LOG.info("%s - %s", clock.timestamp(),
-                                         match.group(1))
+                    File.logger().info("%s - %s", clock.timestamp(),
+                                       match.group(1))
                 if len(results) == 2:
                     rain_last_hour_mm = _int_value(results[0])
                     rain_today_mm = _int_value(results[1])
@@ -53,18 +53,18 @@ def read_weather():
     return rain_last_hour_mm, rain_today_mm
 
 
-@retry(Exception, tries=5, delay=2, backoff=2.0, logger=file_logger.LOG)
+@retry(Exception, tries=5, delay=2, backoff=2.0, logger=File.logger())
 def read_forecast():
     """Read the weather forecast."""
     machine.resetWDT()
     rain_today_mm, rain_tomorrow_mm = (0, 0)
-    file_logger.LOG.info('%s - Req to: %s', clock.timestamp(), _FORECAST_URL)
+    File.logger().info('%s - Req to: %s', clock.timestamp(), _FORECAST_URL)
 
     qpf_allday = False
     results = []
     with requests.get(_FORECAST_URL) as response:
-        file_logger.LOG.info('%s - HTTP status: %d', clock.timestamp(),
-                             response.status_code)
+        File.logger().info('%s - HTTP status: %d', clock.timestamp(),
+                           response.status_code)
         if response.status_code == 200:
             for line in response.iter_lines():
                 gc.collect()
@@ -79,8 +79,8 @@ def read_forecast():
                 match_mm = forecast_mm.search(text)
                 if qpf_allday and match_mm is not None:
                     results.append(match_mm.group(1))
-                    file_logger.LOG.info("%s - %s", clock.timestamp(),
-                                         match_mm.group(1))
+                    File.logger().info("%s - %s", clock.timestamp(),
+                                       match_mm.group(1))
                     qpf_allday = False
 
                     if len(results) == 2:

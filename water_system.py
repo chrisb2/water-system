@@ -4,7 +4,7 @@ import utime
 import clock
 import wifi
 import config
-import file_logger
+from file_logger import File
 import weather
 import thingspeak
 
@@ -13,15 +13,14 @@ def run():
     """Main entry point to execute this program."""
     try:
         machine.setWDT()
-        file_logger.open()
-        file_logger.LOG.info('%s - Awake: %s', clock.timestamp(),
-                             machine.wake_description())
+        File.logger().info('%s - Awake: %s', clock.timestamp(),
+                           machine.wake_description())
         rainfall = False
         sleep_enabled = _sleep_enabled()
 
         battery_volts = _battery_voltage()
         if wifi.connect():
-            file_logger.LOG.info('%s - WIFI connected', clock.timestamp())
+            File.logger().info('%s - WIFI connected', clock.timestamp())
             rain_last_hour_mm, rain_today_mm = weather.read_weather()
             rain_forecast_today_mm, rain_forecast_tomorrow_mm = \
                 weather.read_forecast()
@@ -35,30 +34,30 @@ def run():
                             battery_volts, rainfall)
 
         if rainfall:
-            file_logger.LOG.info('%s - System OFF', clock.timestamp())
+            File.logger().info('%s - System OFF', clock.timestamp())
             _system_off()
         else:
-            file_logger.LOG.info('%s - System ON', clock.timestamp())
+            File.logger().info('%s - System ON', clock.timestamp())
             _system_on()
 
     except Exception as ex:
         # Catch exceptions so that device goes back to sleep if WiFi connect or
         # HTTP calls fail with exceptions
-        file_logger.LOG.exc(ex, '%s - Error', clock.timestamp())
+        File.logger().exc(ex, '%s - Error', clock.timestamp())
     finally:
         try:
             wifi.disconnect()
-            file_logger.LOG.info('%s - WIFI disconnected', clock.timestamp())
+            File.logger().info('%s - WIFI disconnected', clock.timestamp())
         except Exception as ex:
-            file_logger.LOG.exc(ex, '%s - WIFI disconnect error',
-                                clock.timestamp())
+            File.logger().exc(ex, '%s - WIFI disconnect error',
+                              clock.timestamp())
 
         if sleep_enabled:
-            file_logger.LOG.info('%s - Sleeping...', clock.timestamp())
-            file_logger.close()
+            File.logger().info('%s - Sleeping...', clock.timestamp())
+            File.close_log()
             _sleep_until(config.RTC_ALARM)
         else:
-            file_logger.close()
+            File.close_log()
 
 
 def _sleep_until(alarm_time):

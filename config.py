@@ -1,6 +1,6 @@
 """Configuration property values."""
-import urtc
 from machine import Pin
+import urtc
 
 # Wunderground API properties
 WUNDERGROUND_STATION = '/pws:ICANTERB161'
