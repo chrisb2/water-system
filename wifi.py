@@ -2,9 +2,11 @@
 import network
 from utime import ticks_ms, ticks_diff, sleep
 import secrets
+import clock
+from file_logger import File
 
 WIFI_DELAY = 20
-CHECK_INTERVAL = 0.2
+CHECK_INTERVAL = 0.5
 
 
 def connect():
@@ -12,7 +14,7 @@ def connect():
     connected = False
     start = ticks_ms()
 
-    print('Connecting to network...')
+    File.logger().info('%s - Connecting to network...', clock.timestamp())
 
     sta_if = network.WLAN(network.STA_IF)
     sta_if.active(True)
@@ -20,11 +22,13 @@ def connect():
 
     secs = WIFI_DELAY
     while secs >= 0 and not sta_if.isconnected():
+        File.logger().info('%s - Waiting...', clock.timestamp())
         sleep(CHECK_INTERVAL)
         secs -= CHECK_INTERVAL
     if sta_if.isconnected():
-        print('Network, address: %s in %d ms' %
-              (sta_if.ifconfig()[0], ticks_diff(ticks_ms(), start)))
+        File.logger().info('%s - Connected, address: %s in %d ms',
+                           clock.timestamp(),
+                           sta_if.ifconfig()[0], ticks_diff(ticks_ms(), start))
         connected = True
 
     return connected

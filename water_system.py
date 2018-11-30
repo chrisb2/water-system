@@ -24,6 +24,8 @@ def run():
             rain_data = weather.get_rain_data()
             rainfall = rain_data.rainfall_occurring()
             thingspeak.send(rain_data, battery_volts)
+        else:
+            File.logger().info('%s - WIFI connect failed', clock.timestamp())
 
         # If WIFI connect fails, system will default to ON.
         if rainfall:
