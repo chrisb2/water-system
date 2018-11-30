@@ -59,13 +59,13 @@ then connect using Putty or similar serial client and initialize the RTC by
 executing the following:
 ```python
 import wifi
-import water_system
+import clock
 
 wifi.connect()
-water_system.initialize_rtc_from_ntp()
+clock.initialize_rtc_from_ntp()
 
 # Get date time, to verify setting.
-water_system.datetime()
+clock.timestamp()
 ```
 Set the 'No Sleep' DIP switch to 'off', press the RST button to reset the ESP32
 and connect to your water system.
