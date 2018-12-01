@@ -59,7 +59,7 @@ def get_rain_data():
     return data
 
 
-@retry(Exception, tries=5, delay=2, backoff=2, logger=File.logger())
+@retry(Exception, tries=6, delay=2, backoff=2, logger=File.logger())
 def read_weather():
     """Read the current weather."""
     machine.resetWDT()
@@ -91,7 +91,7 @@ def read_weather():
     return rain_last_hour_mm, rain_today_mm
 
 
-@retry(Exception, tries=5, delay=2, backoff=2.0, logger=File.logger())
+@retry(Exception, tries=6, delay=2, backoff=2.0, logger=File.logger())
 def read_forecast():
     """Read the weather forecast."""
     machine.resetWDT()
