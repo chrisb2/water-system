@@ -9,7 +9,11 @@ _i2c = machine.I2C(config.I2C_PERIPHERAL,
 
 
 def datetime():
-    """Get current date/time from RTC."""
+    """Get current date/time from RTC.
+
+    The result is an 8-tuple of the format
+    (year, month, day, weekday, hour, minute, second, millisecond)
+    """
     return _get_rtc().datetime()
 
 

@@ -16,16 +16,26 @@ def run():
         File.logger().info('%s - Awake: %s', clock.timestamp(),
                            machine.wake_description())
         rainfall = False
+        next_wake = config.RTC_ALARM
         sleep_enabled = _sleep_enabled()
         battery_volts = _battery_voltage()
 
         if wifi.connect():
             File.logger().info('%s - WIFI connected', clock.timestamp())
+            machine.RTC().write(0, 0)
             rain_data = weather.get_rain_data()
             rainfall = rain_data.rainfall_occurring()
             thingspeak.send(rain_data, battery_volts)
         else:
             File.logger().info('%s - WIFI connect failed', clock.timestamp())
+            if not machine.RTC().read(0):
+                File.logger().info('%s - sleeping for %d mins',
+                                   clock.timestamp(), config.WIFI_RETRY_MINS)
+                machine.RTC().write(0, 1)
+                next_wake = clock.datetime()
+                next_wake.minute = next_wake.minute + config.WIFI_RETRY_MINS
+            else:
+                machine.RTC().write(0, 0)
 
         # If WIFI connect fails, system will default to ON.
         if rainfall:
@@ -50,7 +60,7 @@ def run():
         if sleep_enabled:
             File.logger().info('%s - Sleeping...', clock.timestamp())
             File.close_log()
-            _sleep_until(config.RTC_ALARM)
+            _sleep_until(next_wake)
         else:
             File.close_log()
 
