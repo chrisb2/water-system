@@ -24,10 +24,18 @@ def timestamp():
            (dt.day, dt.month, dt.year, dt.hour, dt.minute, dt.second)
 
 
+def future(minutes):
+    """Get a date time in the future by the specified minutes."""
+    dt = datetime()
+    return urtc.datetime_tuple(None, None, None, None, None,
+                               dt.minute + minutes, None, None)
+
+
 def initialize_rtc_from_ntp():
     """Initialize RTC date/time from NTP."""
     rtc = machine.RTC()
     rtc.ntp_sync(server="pool.ntp.org")
+    utime.sleep(5)
 
     current_time = list(utime.localtime())
     time_to_set = []

@@ -32,8 +32,7 @@ def run():
                 File.logger().info('%s - sleeping for %d mins',
                                    clock.timestamp(), config.WIFI_RETRY_MINS)
                 machine.RTC().write(0, 1)
-                next_wake = clock.datetime()
-                next_wake.minute = next_wake.minute + config.WIFI_RETRY_MINS
+                next_wake = clock.future(config.WIFI_RETRY_MINS)
             else:
                 machine.RTC().write(0, 0)
 

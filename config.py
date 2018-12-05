@@ -18,9 +18,9 @@ ADC_REF = 1165
 
 # System wakeup time Properties
 # 5AM GMT
-# RTC_ALARM = urtc.datetime_tuple(None, None, None, None, 5, 0, None, None)
+RTC_ALARM = urtc.datetime_tuple(None, None, None, None, 5, 0, None, None)
 # Every hour
-RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, 0, None, None)
+# RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, 0, None, None)
 
 # Std Micropython
 I2C_PERIPHERAL = -1
