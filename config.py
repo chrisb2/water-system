@@ -2,9 +2,11 @@
 from machine import Pin
 import urtc
 
-# Wunderground API properties
-WUNDERGROUND_STATION = '/pws:ICANTERB161'
-WUNDERGROUND_LOCATION = 'zmw:00000.7.93781'
+# NZDT, 13 hours ahead
+HOURS_DIFF_FROM_GMT = 13
+
+# YR Proxy
+YR_API_PROXY = '192.168.1.100:8080/yr'
 
 # Resistor Divider properties (Ohms)
 R1 = 10070000

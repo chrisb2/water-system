@@ -62,6 +62,8 @@ def run():
             _sleep_until(next_wake)
         else:
             File.close_log()
+            wifi.connect()
+            wifi.enable_ftp()
 
 
 def _sleep_until(alarm_time):

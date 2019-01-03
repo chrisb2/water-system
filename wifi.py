@@ -44,3 +44,10 @@ def disconnect():
     while secs >= 0 and sta_if.isconnected():
         sleep(CHECK_INTERVAL)
         secs -= CHECK_INTERVAL
+
+
+def enable_ftp():
+    """Enable fTP."""
+    network.ftp.start()
+    while network.ftp.status()[2] != 'Ready':
+        sleep(0.2)

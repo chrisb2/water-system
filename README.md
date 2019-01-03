@@ -1,10 +1,9 @@
 # Garden Watering System Controller
 
 This [MicroPython](http://micropython.org/) project on an [ESP32](https://en.wikipedia.org/wiki/ESP32) uses
-[Wunderground](https://www.wunderground.com) to determine if
-significant rain has fallen in the last day, or is forecast today, and if so
-disables the garden watering system to conserve water. It reports the rainfall
-and system status to [ThingSpeak](https://thingspeak.com).
+weather API's to determine if significant rain has fallen in the last day, or
+is forecast today, and if so disables the garden watering system to conserve
+water. It reports the rainfall and system status to [ThingSpeak](https://thingspeak.com).
 
 The code depends on my personal fork of [Loboris MicroPython for ESP32](https://github.com/chrisb2/MicroPython_ESP32_psRAM_LoBo).
 
@@ -29,6 +28,12 @@ was fitted to allow air, but not water vapor in and out. The electrical
 connections exiting the container to the watering system must be completely
 sealed.
 
+## Weather API's
+
+All weather API calls and rain calculations are in _weather.py_, you will need
+to update the services called and the code used to extract data from the
+responses.
+
 ## Usage
 
 Configure a ThingSpeak channel something like:
@@ -44,9 +49,6 @@ Create a file called _secrets.py_ and fill in appropriate values:
 WIFI_SSID = 'XXXXXX'
 WIFI_PASSPHRASE = 'XXXXXX'
 THINGSPEAK_API_KEY = 'XXXXXX'
-WUNDERGROUND_API_KEY = 'XXXXXX'
-WUNDERGROUND_STATION = '/NZ/christchurch'
-WUNDERGROUND_LOCATION = 'zmw:00000.7.93781'
 ```
 By default the RTC will wake the ESP32 from deep sleep at 5am GMT every day, if
 you want a different time edit the value of the _RTC_ALARM_ constant in
