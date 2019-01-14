@@ -69,12 +69,16 @@ def read_rainfall():
         File.logger().info('%s - HTTP status: %d', clock.timestamp(),
                            response.status_code)
         if response.status_code == 200:
+            first_line = True
             for line in response.iter_lines():
+                if first_line:
+                    first_line = False
+                    continue
                 gc.collect()
                 text = line.decode('utf-8', 'ignore').strip()
                 values = text.split(',')
                 if len(values) == 3:
-                    day = values[1].split('/')[0]
+                    day = int(values[1].split('/')[0])
                     if day == clock.day_of_month():
                         mm = float(values[2])
                         rain_today_mm += mm
