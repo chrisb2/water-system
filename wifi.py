@@ -10,7 +10,7 @@ WIFI_DELAY = 10
 CHECK_INTERVAL = 0.5
 
 
-@retry(Exception, tries=5, delay=2, backoff=2.0, logger=File.logger())
+@retry(Exception, tries=5, delay=4, backoff=2.0, logger=File.logger())
 def connect():
     """Connect to WiFi."""
     start = ticks_ms()
