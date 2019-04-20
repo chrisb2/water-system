@@ -20,22 +20,31 @@ def run():
         sleep_enabled = _sleep_enabled()
         battery_volts = _battery_voltage()
 
-        wifi.connect()
-        File.logger().info('%s - WIFI connected', clock.timestamp())
-        rain_data = weather.get_rain_data()
-        rainfall = rain_data.rainfall_occurring()
-        thingspeak.send(rain_data, battery_volts)
+        if wifi.connect():
+            _resetConnectCount()
+            File.logger().info('%s - WIFI connected', clock.timestamp())
+            rain_data = weather.get_rain_data()
+            rainfall = rain_data.rainfall_occurring()
+            thingspeak.send(rain_data, battery_volts)
 
-        if rainfall:
-            File.logger().info('%s - System OFF', clock.timestamp())
-            _system_off()
+            if rainfall:
+                File.logger().info('%s - System OFF', clock.timestamp())
+                _system_off()
+            else:
+                File.logger().info('%s - System ON', clock.timestamp())
+                _system_on()
         else:
-            File.logger().info('%s - System ON', clock.timestamp())
-            _system_on()
+            if _incrementConnectCount() > 5:
+                # Give up trying to connect to WiFi
+                _resetConnectCount()
+            else:
+                File.logger().info('%s - Set one minute sleep, attempts %d',
+                                   clock.timestamp(), _getConnectCount())
+                next_wake = config.SLEEP_ONE_MINUTE
 
     except Exception as ex:
-        # Catch exceptions so that device goes back to sleep if WiFi connect or
-        # HTTP calls fail with exceptions.
+        # Catch exceptions so that device goes back to sleep HTTP calls
+        # fail with exceptions.
         File.logger().exc(ex, '%s - Error', clock.timestamp())
     finally:
         try:
@@ -51,8 +60,8 @@ def run():
             _sleep_until(next_wake)
         else:
             File.close_log()
-            wifi.connect()
-            wifi.enable_ftp()
+            if wifi.connect():
+                wifi.enable_ftp()
 
 
 def _sleep_until(alarm_time):
@@ -93,3 +102,22 @@ def _battery_voltage():
 
 def _sleep_enabled():
     return config.NO_SLEEP_PIN.value() == 0
+
+
+def _getConnectCount():
+    val = machine.RTC().read_string()
+    if val is not None:
+        return int(val)
+    else:
+        machine.RTC().write_string('0')
+        return 0
+
+
+def _incrementConnectCount():
+    val = _getConnectCount() + 1
+    machine.RTC().write_string(str(val))
+    return val
+
+
+def _resetConnectCount():
+    machine.RTC().write_string('0')

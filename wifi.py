@@ -3,14 +3,12 @@ import network
 from utime import ticks_ms, ticks_diff, sleep
 import secrets
 import clock
-from retrier import retry
 from file_logger import File
 
 WIFI_DELAY = 10
 CHECK_INTERVAL = 0.5
 
 
-@retry(Exception, tries=5, delay=4, backoff=2.0, logger=File.logger())
 def connect():
     """Connect to WiFi."""
     start = ticks_ms()
@@ -32,9 +30,11 @@ def connect():
         File.logger().info('%s - Connected, address: %s in %d ms',
                            clock.timestamp(),
                            sta_if.ifconfig()[0], ticks_diff(ticks_ms(), start))
+        return True
     else:
         sta_if.active(False)
-        raise RuntimeError('%s - WiFi did not connect' % clock.timestamp())
+        File.logger().error('%s - WiFi did not connect' % clock.timestamp())
+        return False
 
 
 def disconnect():

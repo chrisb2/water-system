@@ -23,6 +23,9 @@ ADC_REF = 1165
 RTC_ALARM = urtc.datetime_tuple(None, None, None, None, 5, 0, None, None)
 # Every hour
 # RTC_ALARM = urtc.datetime_tuple(None, None, None, None, None, 0, None, None)
+# Time to sleep between attempts to connect to WiFi
+SLEEP_ONE_MINUTE = \
+    urtc.datetime_tuple(None, None, None, None, None, None, 0, None)
 
 # Std Micropython
 I2C_PERIPHERAL = -1
