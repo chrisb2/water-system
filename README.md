@@ -5,8 +5,6 @@ weather API's to determine if significant rain has fallen in the last day, or
 is forecast today, and if so disables the garden watering system to conserve
 water. It reports the rainfall and system status to [ThingSpeak](https://thingspeak.com).
 
-The code depends on my personal fork of [Loboris MicroPython for ESP32](https://github.com/chrisb2/MicroPython_ESP32_psRAM_LoBo).
-
 The project is run off a single 1600mAh LiFePO4 battery (18650) and uses the deep sleep mode of the ESP32 to
 extend the battery life.
 
@@ -42,6 +40,7 @@ Configure a ThingSpeak channel something like:
 
 Download the library:
 * [urtc](https://raw.githubusercontent.com/chrisb2/Adafruit-uRTC/master/urtc.py) real time clock (RTC) library.
+* [urequests](https://github.com/micropython/micropython-lib/blob/cfca9b4f9096f0fe1c0eeefead25c1d5994e1b64/urequests/urequests.py) library which supports large responses.
 
 Create a file called _secrets.py_ and fill in appropriate values:
 ```python

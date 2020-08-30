@@ -14,9 +14,8 @@ R2 = 3329000
 # External resister divider (ohms)
 RESISTOR_RATIO = (R1 + R2) / R2
 
-# ESP32 properties
-# ADC reference voltage in millivolts (adjust for each ESP32)
-ADC_REF = 1165
+# ADC fudge factor - required to get correct battery voltage
+ADC_FACTOR = 1.08
 
 # System wakeup time Properties
 # 5AM GMT

@@ -29,7 +29,7 @@ class File:
         if File.__logger is not None:
             raise Exception("This class is a singleton!")
         else:
-            self.__stream = io.open('system.log', mode='wa')
+            self.__stream = io.open('system.log', mode='a')
             logging.basicConfig(level=logging.INFO, stream=self.__stream)
             File.__logger = logging.getLogger('system')
             File.__instance = self

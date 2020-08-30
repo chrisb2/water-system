@@ -1,11 +1,11 @@
 """Weather query module."""
-import machine
 import ure
 import gc
 import config
 from retrier import retry
 import urequests as requests
 from file_logger import File
+import watcher
 #  import secrets
 import clock
 
@@ -14,7 +14,7 @@ _RAIN_URL = (
    'Rainfall%20for%20individual%20site/CSV?SiteNo=326512&Period=2_Days')
 
 _FORECAST_URL = \
-    'http://{}/New_Zealand/Canterbury/Christchurch/forecast.xml'.format(
+    'http://{}/New_Zealand/Canterbury/Lincoln/forecast.xml'.format(
         config.YR_API_PROXY)
 
 _time_regex = ure.compile('time from=\"(\d+\-\d+\-\d+)')
@@ -62,7 +62,7 @@ def get_rain_data():
 @retry(Exception, tries=6, delay=2, backoff=2, logger=File.logger())
 def read_rainfall():
     """Read todays rainfall."""
-    machine.resetWDT()
+    watcher.feed()
     rain_last_hour_mm, rain_today_mm = (0.0, 0.0)
     File.logger().info('%s - Req to: %s', clock.timestamp(), _RAIN_URL)
     with requests.get(_RAIN_URL) as response:
@@ -97,7 +97,7 @@ def read_rainfall():
 @retry(Exception, tries=6, delay=2, backoff=2.0, logger=File.logger())
 def read_forecast():
     """Read the weather forecast."""
-    machine.resetWDT()
+    watcher.feed()
     rain_today_mm, rain_tomorrow_mm = (0.0, 0.0)
     File.logger().info('%s - Req to: %s', clock.timestamp(), _FORECAST_URL)
 

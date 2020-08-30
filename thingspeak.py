@@ -1,8 +1,8 @@
 """Thingspeak upload."""
-import machine
 from retrier import retry
 import urequests as requests
 from file_logger import File
+import watcher
 import secrets
 import clock
 
@@ -15,7 +15,7 @@ _URL = (
 @retry(Exception, tries=5, delay=2, backoff=2.0, logger=File.logger())
 def send(rain_data, battery_volts):
     """Send weather and system information to Thingspeak."""
-    machine.resetWDT()
+    watcher.feed()
     data_tuple = rain_data.get_data()
     url = _URL.format(key=secrets.THINGSPEAK_API_KEY,
                       *data_tuple, volts=battery_volts,
