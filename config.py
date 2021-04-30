@@ -5,9 +5,6 @@ import urtc
 # NZDT, 13 hours ahead
 HOURS_DIFF_FROM_GMT = 13
 
-# YR Proxy for www.yr.no/place/
-YR_API_PROXY = '192.168.1.100:8080/yr'
-
 # Resistor Divider properties (Ohms)
 R1 = 10070000
 R2 = 3329000

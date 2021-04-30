@@ -1,12 +1,11 @@
 """Weather query module."""
 import ure
 import gc
-import config
 from retrier import retry
-import urequests as requests
+import urequests
 from file_logger import File
 import watcher
-#  import secrets
+import secrets
 import clock
 
 _RAIN_URL = (
@@ -14,11 +13,13 @@ _RAIN_URL = (
    'Rainfall%20for%20individual%20site/CSV?SiteNo=326512&Period=2_Days')
 
 _FORECAST_URL = \
-    'http://{}/New_Zealand/Canterbury/Lincoln/forecast.xml'.format(
-        config.YR_API_PROXY)
+    'https://api.met.no/weatherapi/locationforecast/2.0/compact?{}'.format(
+        secrets.YR_LOCATION)
 
-_time_regex = ure.compile('time from=\"(\d+\-\d+\-\d+)')
-_rain_regex = ure.compile('precipitation.*value=\"(\d*\.\d+|\d+)\"')
+_timeseries_regex = ure.compile(b'timeseries\":\[(.*)')
+_dataend_regex = ure.compile(b'(.*),\{')
+_nextperiod_regex = ure.compile(b'\},(\{.*)')
+_response = bytearray(640)
 
 
 class RainData:
@@ -65,7 +66,7 @@ def read_rainfall():
     watcher.feed()
     rain_last_hour_mm, rain_today_mm = (0.0, 0.0)
     File.logger().info('%s - Req to: %s', clock.timestamp(), _RAIN_URL)
-    with requests.get(_RAIN_URL) as response:
+    with urequests.get(_RAIN_URL) as response:
         File.logger().info('%s - HTTP status: %d', clock.timestamp(),
                            response.status_code)
         if response.status_code == 200:
@@ -98,33 +99,59 @@ def read_rainfall():
 def read_forecast():
     """Read the weather forecast."""
     watcher.feed()
-    rain_today_mm, rain_tomorrow_mm = (0.0, 0.0)
     File.logger().info('%s - Req to: %s', clock.timestamp(), _FORECAST_URL)
+    rain_today_mm, rain_tomorrow_mm = (0.0, 0.0)
 
-    with requests.get(_FORECAST_URL) as response:
-        File.logger().info('%s - HTTP status: %d', clock.timestamp(),
-                           response.status_code)
-        if response.status_code == 200:
-            time_matched = False
-            date = ''
-            for line in response.iter_lines():
-                gc.collect()
-                text = line.decode('utf-8', 'ignore').strip()
+    chunkSize = 30
+    windowSize = chunkSize * 2
+    window = memoryview(bytearray(windowSize))
+    emptyChunk = bytes(chunkSize)
 
-                if not time_matched:
-                    match_time = _time_regex.search(text)
-                    if match_time is not None:
-                        date = match_time.group(1)
-                        if clock.greater_than_tommorow(date):
-                            break
-                        time_matched = True
-                    continue
+    start_regex = ure.compile(b'timeseries')
+    continue_regex = ure.compile(b'\},\{')
+    hour_regex = ure.compile(b'next_1_hours')
+    precip_regex = ure.compile(b'precipitation_amount\":(\d+\.\d)')
+    date_regex = ure.compile(b'time\":\"(\d+-\d+-\d+)T')
+    periodFound, hourFound, precipFound, dateFound = False, False, False, False
 
-                match_rain = _rain_regex.search(text)
-                if time_matched and match_rain is not None:
-                    time_matched = False
-                    mm = float(match_rain.group(1))
-                    if clock.equal_to_today(date):
+    with urequests.get(_FORECAST_URL,
+                       headers=secrets.YR_HEADER) as response:
+        print('HTTP status: %d' % response.status_code)
+        if response.status_code == 200 or response.status_code == 203:
+            for chunk in response.iter_content(chunkSize):
+                # Populate response window
+                window[0:chunkSize] = window[chunkSize:windowSize]
+                if len(chunk) == chunkSize:
+                    window[chunkSize:windowSize] = chunk
+                else:
+                    # last chunk is short
+                    window[chunkSize:windowSize] = emptyChunk
+                    window[chunkSize:chunkSize+len(chunk)] = chunk
+                # print(window)
+                windowBytes = bytes(window)  # regex requires bytes
+                # Gather precipitation data
+                if continue_regex.search(windowBytes) or\
+                   start_regex.search(windowBytes):
+                    periodFound = True
+                if periodFound and hour_regex.search(windowBytes):
+                    hourFound = True
+                if periodFound and not dateFound:
+                    dateGroup = date_regex.search(windowBytes)
+                    if dateGroup:
+                        dateFound = True
+                        date = dateGroup.group(1)
+                if hourFound and not precipFound:
+                    precipGroup = precip_regex.search(windowBytes)
+                    if precipGroup:
+                        precipFound = True
+                        mm = precipGroup.group(1)
+                if dateFound and precipFound:
+                    periodFound, hourFound = False, False
+                    dateFound, precipFound = False, False
+                    # print(date.decode(), mm.decode())
+                    if clock.greater_than_tommorow(date):
+                        break
+                    elif clock.equal_to_today(date):
                         rain_today_mm += mm
                     else:
                         rain_tomorrow_mm += mm

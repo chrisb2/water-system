@@ -5,8 +5,8 @@ weather API's to determine if significant rain has fallen in the last day, or
 is forecast today, and if so disables the garden watering system to conserve
 water. It reports the rainfall and system status to [ThingSpeak](https://thingspeak.com).
 
-The project is run off a single 1600mAh LiFePO4 battery (18650) and uses the deep sleep mode of the ESP32 to
-extend the battery life.
+The project is run off a single 1600mAh LiFePO4 battery (18650) and uses the
+deep sleep mode of the ESP32 to extend the battery life.
 
 This controller is suitable for use with automatic watering systems which expose
 the ability to disable the system by making a connection open circuit.
@@ -48,6 +48,9 @@ Create a file called _secrets.py_ and fill in appropriate values:
 WIFI_SSID = 'XXXXXX'
 WIFI_PASSPHRASE = 'XXXXXX'
 THINGSPEAK_API_KEY = 'XXXXXX'
+
+YR_HEADER = {'User-Agent': 'XXXX'}
+YR_LOCATION = 'lat=-XX.XXX&lon=YYY.YYY'
 ```
 By default the RTC will wake the ESP32 from deep sleep at 5am GMT every day, if
 you want a different time edit the value of the _RTC_ALARM_ constant in
