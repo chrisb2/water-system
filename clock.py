@@ -2,13 +2,13 @@
 import machine
 import utime
 import urtc
+import ntptime
 import config
 
 _SECS_IN_HOUR = 3600
 _SECS_IN_DAY = 24 * _SECS_IN_HOUR
 
-_i2c = machine.I2C(config.I2C_PERIPHERAL,
-                   sda=config.SDA_PIN, scl=config.SCL_PIN)
+_i2c = machine.SoftI2C(sda=config.SDA_PIN, scl=config.SCL_PIN)
 
 
 def datetime():
@@ -78,8 +78,7 @@ def future(minutes):
 
 def initialize_rtc_from_ntp():
     """Initialize RTC date/time from NTP."""
-    rtc = machine.RTC()
-    rtc.ntp_sync(server="pool.ntp.org")
+    ntptime.settime()
     utime.sleep(5)
 
     current_time = list(utime.localtime())

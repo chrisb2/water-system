@@ -2,7 +2,7 @@
 import ure
 import gc
 from retrier import retry
-import urequests
+import requests
 from file_logger import File
 import watcher
 import secrets
@@ -14,12 +14,15 @@ _RAIN_URL = (
 
 _FORECAST_URL = \
     'https://api.met.no/weatherapi/locationforecast/2.0/compact?{}'.format(
-        secrets.YR_LOCATION)
+        secrets.LOCATION)
 
-_timeseries_regex = ure.compile(b'timeseries\":\[(.*)')
-_dataend_regex = ure.compile(b'(.*),\{')
-_nextperiod_regex = ure.compile(b'\},(\{.*)')
-_response = bytearray(640)
+start_regex = ure.compile(b'timeseries')
+continue_regex = ure.compile(b'\},\{')
+hour_regex = ure.compile(b'next_1_hours')
+precip_regex = ure.compile(b'precipitation_amount\":(\d+\.\d)')
+date_regex = ure.compile(b'time\":\"(\d+-\d+-\d+)T')
+chunkSize = 30
+windowSize = chunkSize * 2
 
 
 class RainData:
@@ -66,7 +69,7 @@ def read_rainfall():
     watcher.feed()
     rain_last_hour_mm, rain_today_mm = (0.0, 0.0)
     File.logger().info('%s - Req to: %s', clock.timestamp(), _RAIN_URL)
-    with urequests.get(_RAIN_URL) as response:
+    with requests.get(_RAIN_URL) as response:
         File.logger().info('%s - HTTP status: %d', clock.timestamp(),
                            response.status_code)
         if response.status_code == 200:
@@ -99,24 +102,17 @@ def read_rainfall():
 def read_forecast():
     """Read the weather forecast."""
     watcher.feed()
-    File.logger().info('%s - Req to: %s', clock.timestamp(), _FORECAST_URL)
-    rain_today_mm, rain_tomorrow_mm = (0.0, 0.0)
 
-    chunkSize = 30
-    windowSize = chunkSize * 2
+    rain_today_mm, rain_tomorrow_mm = (0.0, 0.0)
     window = memoryview(bytearray(windowSize))
     emptyChunk = bytes(chunkSize)
-
-    start_regex = ure.compile(b'timeseries')
-    continue_regex = ure.compile(b'\},\{')
-    hour_regex = ure.compile(b'next_1_hours')
-    precip_regex = ure.compile(b'precipitation_amount\":(\d+\.\d)')
-    date_regex = ure.compile(b'time\":\"(\d+-\d+-\d+)T')
     periodFound, hourFound, precipFound, dateFound = False, False, False, False
 
-    with urequests.get(_FORECAST_URL,
-                       headers=secrets.YR_HEADER) as response:
-        print('HTTP status: %d' % response.status_code)
+    File.logger().info('%s - Req to: %s', clock.timestamp(), _FORECAST_URL)
+    with requests.get(_FORECAST_URL,
+                      headers=secrets.HEADER) as response:
+        File.logger().info('%s - HTTP status: %d', clock.timestamp(),
+                           response.status_code)
         if response.status_code == 200 or response.status_code == 203:
             for chunk in response.iter_content(chunkSize):
                 # Populate response window
@@ -139,16 +135,16 @@ def read_forecast():
                     dateGroup = date_regex.search(windowBytes)
                     if dateGroup:
                         dateFound = True
-                        date = dateGroup.group(1)
+                        date = dateGroup.group(1).decode()
                 if hourFound and not precipFound:
                     precipGroup = precip_regex.search(windowBytes)
                     if precipGroup:
                         precipFound = True
-                        mm = precipGroup.group(1)
+                        mm = float(precipGroup.group(1))
                 if dateFound and precipFound:
                     periodFound, hourFound = False, False
                     dateFound, precipFound = False, False
-                    # print(date.decode(), mm.decode())
+                    # print(date, mm)
                     if clock.greater_than_tommorow(date):
                         break
                     elif clock.equal_to_today(date):

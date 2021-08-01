@@ -6,7 +6,7 @@ import clock
 from file_logger import File
 
 WIFI_DELAY = 10
-CHECK_INTERVAL = 0.5
+CHECK_INTERVAL = 0.1
 
 
 def connect():

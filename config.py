@@ -23,12 +23,6 @@ RTC_ALARM = urtc.datetime_tuple(None, None, None, None, 5, 0, None, None)
 SLEEP_ONE_MINUTE = \
     urtc.datetime_tuple(None, None, None, None, None, None, 0, None)
 
-# Std Micropython
-I2C_PERIPHERAL = -1
-
-# Loboris MicroPython
-# I2C_PERIPHERAL = 1
-
 SCL_PIN = Pin(17)
 SDA_PIN = Pin(5)
 WAKEUP_PIN = Pin(4, Pin.IN, Pin.PULL_UP)

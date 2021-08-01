@@ -21,7 +21,7 @@ or zoom the web page.
 ## Container
 
 I used a polycarbonate box with a build-in O-ring seal. A
-[PTFE breathable vent](https://nicegear.nz/product/waterproof-breathable-enclosure-vent)
+[PTFE breathable vent](https://www.aliexpress.com/store/1823522)
 was fitted to allow air, but not water vapor in and out. The electrical
 connections exiting the container to the watering system must be completely
 sealed.
@@ -40,7 +40,6 @@ Configure a ThingSpeak channel something like:
 
 Download the library:
 * [urtc](https://raw.githubusercontent.com/chrisb2/Adafruit-uRTC/master/urtc.py) real time clock (RTC) library.
-* [urequests](https://github.com/micropython/micropython-lib/blob/cfca9b4f9096f0fe1c0eeefead25c1d5994e1b64/urequests/urequests.py) library which supports large responses.
 
 Create a file called _secrets.py_ and fill in appropriate values:
 ```python
@@ -49,8 +48,8 @@ WIFI_SSID = 'XXXXXX'
 WIFI_PASSPHRASE = 'XXXXXX'
 THINGSPEAK_API_KEY = 'XXXXXX'
 
-YR_HEADER = {'User-Agent': 'XXXX'}
-YR_LOCATION = 'lat=-XX.XXX&lon=YYY.YYY'
+HEADER = {'User-Agent': 'XXXX'}
+LOCATION = 'lat=-XX.XXX&lon=YYY.YYY'
 ```
 By default the RTC will wake the ESP32 from deep sleep at 5am GMT every day, if
 you want a different time edit the value of the _RTC_ALARM_ constant in

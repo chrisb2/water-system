@@ -1,6 +1,6 @@
 """Thingspeak upload."""
 from retrier import retry
-import urequests as requests
+import requests
 from file_logger import File
 import watcher
 import secrets
