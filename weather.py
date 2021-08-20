@@ -16,14 +16,6 @@ _FORECAST_URL = \
     'https://api.met.no/weatherapi/locationforecast/2.0/compact?{}'.format(
         secrets.LOCATION)
 
-start_regex = ure.compile(b'timeseries')
-continue_regex = ure.compile(b'\},\{')
-hour_regex = ure.compile(b'next_1_hours')
-precip_regex = ure.compile(b'precipitation_amount\":(\d+\.\d)')
-date_regex = ure.compile(b'time\":\"(\d+-\d+-\d+)T')
-chunkSize = 30
-windowSize = chunkSize * 2
-
 
 class RainData:
     """Holds current and forecast rain data."""
@@ -102,6 +94,16 @@ def read_rainfall():
 def read_forecast():
     """Read the weather forecast."""
     watcher.feed()
+
+    start_regex = ure.compile(r'timeseries')
+    continue_regex = ure.compile(r'\},\{')
+    hour_regex = ure.compile(r'next_1_hours')
+    precip_regex = ure.compile(r'precipitation_amount\":(\d+\.\d)')
+    date_regex = ure.compile(r'time\":\"(\d+-\d+-\d+)T')
+    # Large chunk size more performant as less regex's run. Must be less than
+    # characters in one timeseries element in the response.
+    chunkSize = 1000
+    windowSize = chunkSize * 2
 
     rain_today_mm, rain_tomorrow_mm = (0.0, 0.0)
     window = memoryview(bytearray(windowSize))

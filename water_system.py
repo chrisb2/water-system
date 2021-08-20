@@ -13,12 +13,12 @@ import thingspeak
 
 def run():
     """Main entry point to execute this program."""
+    sleep_enabled = _sleep_enabled()
     try:
         File.logger().info('%s - Awake: %s', clock.timestamp(),
                            machine.wake_reason())
         rainfall = False
         next_wake = config.RTC_ALARM
-        sleep_enabled = _sleep_enabled()
         battery_volts = _battery_voltage()
 
         if not sleep_enabled:
@@ -26,7 +26,6 @@ def run():
 
         if wifi.connect():
             _resetConnectCount()
-            File.logger().info('%s - WIFI connected', clock.timestamp())
             rain_data = weather.get_rain_data()
             rainfall = rain_data.rainfall_occurring()
             thingspeak.send(rain_data, battery_volts)
@@ -53,7 +52,6 @@ def run():
     finally:
         try:
             wifi.disconnect()
-            File.logger().info('%s - WIFI disconnected', clock.timestamp())
         except Exception as ex:
             File.logger().exc(ex, '%s - WIFI disconnect error',
                               clock.timestamp())

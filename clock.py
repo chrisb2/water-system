@@ -40,8 +40,7 @@ def day_of_month(days_in_future=0):
 
 
 def greater_than_tommorow(date):
-    secs = urtc.tuple2seconds(datetime())
-    secs += 1 * _SECS_IN_DAY
+    secs = urtc.tuple2seconds(datetime()) + _SECS_IN_DAY
 
     year, month, day = date.split('-')
     curr = urtc.datetime_tuple(int(year), int(month), int(day), 0, 0, 0, 0, 0)
