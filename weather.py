@@ -134,13 +134,11 @@ def read_forecast():
                 if periodFound and hour_regex.search(windowBytes):
                     hourFound = True
                 if periodFound and not dateFound:
-                    dateGroup = date_regex.search(windowBytes)
-                    if dateGroup:
+                    if (dateGroup := date_regex.search(windowBytes)):
                         dateFound = True
                         date = dateGroup.group(1).decode()
                 if hourFound and not precipFound:
-                    precipGroup = precip_regex.search(windowBytes)
-                    if precipGroup:
+                    if (precipGroup := precip_regex.search(windowBytes)):
                         precipFound = True
                         mm = float(precipGroup.group(1))
                 if dateFound and precipFound:
@@ -153,7 +151,6 @@ def read_forecast():
                         rain_today_mm += mm
                     else:
                         rain_tomorrow_mm += mm
-
         else:
             raise ValueError('HTTP status %d' % response.status_code)
 
