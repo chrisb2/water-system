@@ -61,18 +61,23 @@ def run():
             File.close_log()
             _sleep_until(next_wake)
         else:
+            File.logger().info('%s - Not sleeping', clock.timestamp())
             File.close_log()
+
+
+def init_ftp():
+    wifi.connect()
+    import ftp
 
 
 def _sleep_until(alarm_time):
     _configure_pin_interrupt()
     clock.configure_rtc_alarm(alarm_time)
-    print('Sleeping...')
     machine.deepsleep()
 
 
 def _configure_pin_interrupt():
-    esp32.wake_on_ext0(pin=config.WAKEUP_PIN, level=esp32.WAKEUP_ALL_LOW)
+    esp32.wake_on_ext1(pins=(config.WAKEUP_PIN,), level=esp32.WAKEUP_ALL_LOW)
 
 
 def _system_on():
@@ -94,9 +99,8 @@ def _battery_voltage():
     adc = machine.ADC(config.BATTERY_PIN)
     sum = 0
     for x in range(0, config.ADC_READS):
-        sum += adc.read()
-    return (sum / config.ADC_READS) / 4096 * \
-        config.ADC_FACTOR * config.RESISTOR_RATIO
+        sum += adc.read_uv() / 1000000
+    return (sum / config.ADC_READS) * config.RESISTOR_RATIO
 
 
 def _sleep_enabled():

@@ -64,8 +64,8 @@ def equal_to_today(date):
 def timestamp():
     """Get current timezone date/time from RTC as DD-MM-YYYY HH24:MM:SS."""
     dt = datetime()
-    return '%02d-%02d-%d %02d:%02d:%02d' % \
-           (dt.day, dt.month, dt.year, dt.hour, dt.minute, dt.second)
+    return f"{dt.day:02d}-{dt.month:02d}-{dt.year:d} " +\
+           f"{dt.hour:02d}:{dt.minute:02d}:{dt.second:02d}"
 
 
 def future(minutes):

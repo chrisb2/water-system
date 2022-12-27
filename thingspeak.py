@@ -7,8 +7,8 @@ import secrets
 import clock
 
 _URL = (
-    'https://api.thingspeak.com/update'
-    '?api_key={key}&field1={}&field2={}&field3={}&field4={}'
+    'https://api.thingspeak.com/update.json'
+    '?api_key={key}&field1={f1}&field2={f2}&field3={f3}&field4={f4}'
     '&field5={volts}&field6={status}')
 
 
@@ -16,9 +16,10 @@ _URL = (
 def send(rain_data, battery_volts):
     """Send weather and system information to Thingspeak."""
     watcher.feed()
-    data_tuple = rain_data.get_data()
+    data = rain_data.get_data()
     url = _URL.format(key=secrets.THINGSPEAK_API_KEY,
-                      *data_tuple, volts=battery_volts,
+                      f1=data[0], f2=data[1], f3=data[2], f4=data[3],
+                      volts=battery_volts,
                       status=int(not rain_data.rainfall_occurring()))
     File.logger().info('%s - Req to: %s', clock.timestamp(), url)
     with requests.get(url) as response:

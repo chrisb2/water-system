@@ -3,3 +3,6 @@ urtc.py
 docs
 notes.txt
 change_log.txt
+logs
+analysis
+__pycache__

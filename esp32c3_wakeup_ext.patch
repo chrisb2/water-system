@@ -1,0 +1,291 @@
+From c3f283bbac7e68d288ab8321e439edd04f814ab9 Mon Sep 17 00:00:00 2001
+From: "OSi (Ondrej Sienczak)" <ondrej.sienczak@seznam.cz>
+Date: Wed, 12 Oct 2022 00:34:38 +0200
+Subject: [PATCH 1/5] modmachine: Implemented GPIO wake-up for ESP32-C3.
+
+As ESP32-C3 uses GPIO wake-up instead of EXT0/1 wake-up,
+several small changes in code was required. Interface stays
+the same as for generic ESP32 but EXT0 is ignored and EXT1
+is used as wake-up source.
+
+Signed-off-by: Ondrej Sienczak <ondrej.sienczak@gmail.com>
+---
+ ports/esp32/modmachine.c | 21 ++++++++++++++++++++-
+ 1 file changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/ports/esp32/modmachine.c b/ports/esp32/modmachine.c
+index a70f2fbed..b8c939bee 100644
+--- a/ports/esp32/modmachine.c
++++ b/ports/esp32/modmachine.c
+@@ -134,7 +134,26 @@ STATIC mp_obj_t machine_sleep_helper(wake_type_t wake_type, size_t n_args, const
+         esp_sleep_enable_timer_wakeup(((uint64_t)expiry) * 1000);
+     }
+ 
+-    #if !CONFIG_IDF_TARGET_ESP32C3
++    #if CONFIG_IDF_TARGET_ESP32C3
++
++    if (machine_rtc_config.ext1_pins != 0) {
++        for (int i = 0; i < GPIO_NUM_MAX; ++i) {
++            uint64_t bm = 1ULL << i;
++
++            if (machine_rtc_config.ext1_pins & bm) {
++                if (!esp_sleep_is_valid_wakeup_gpio((gpio_num_t)i)) {
++                    mp_raise_ValueError(MP_ERROR_TEXT("invalid wake-up port"));
++                }
++                gpio_sleep_set_direction((gpio_num_t)i, GPIO_MODE_INPUT);
++            }
++        }
++        esp_deep_sleep_enable_gpio_wakeup(
++            machine_rtc_config.ext1_pins,
++            machine_rtc_config.ext1_level ? ESP_GPIO_WAKEUP_GPIO_HIGH : ESP_GPIO_WAKEUP_GPIO_LOW);
++        esp_sleep_enable_gpio_wakeup();
++    }
++
++    #else
+ 
+     if (machine_rtc_config.ext0_pin != -1 && (machine_rtc_config.ext0_wake_types & wake_type)) {
+         esp_sleep_enable_ext0_wakeup(machine_rtc_config.ext0_pin, machine_rtc_config.ext0_level ? 1 : 0);
+-- 
+2.25.1
+
+
+From 848805e70154cd391c3e23a7f9288f40720220b5 Mon Sep 17 00:00:00 2001
+From: "OSi (Ondrej Sienczak)" <ondrej.sienczak@seznam.cz>
+Date: Wed, 12 Oct 2022 16:23:21 +0200
+Subject: [PATCH 2/5] modmachine: Fixed wake-up reason for on ESP32-C3.
+
+Wake-up reason for pin wake-up is not EXT1 but GPIO on ESP32-C3.
+
+Signed-off-by: Ondrej Sienczak <ondrej.sienczak@gmail.com>
+---
+ ports/esp32/modmachine.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/ports/esp32/modmachine.c b/ports/esp32/modmachine.c
+index b8c939bee..83775f29d 100644
+--- a/ports/esp32/modmachine.c
++++ b/ports/esp32/modmachine.c
+@@ -357,7 +357,11 @@ STATIC const mp_rom_map_elem_t machine_module_globals_table[] = {
+     { MP_ROM_QSTR(MP_QSTR_wake_reason), MP_ROM_PTR(&machine_wake_reason_obj) },
+     { MP_ROM_QSTR(MP_QSTR_PIN_WAKE), MP_ROM_INT(ESP_SLEEP_WAKEUP_EXT0) },
+     { MP_ROM_QSTR(MP_QSTR_EXT0_WAKE), MP_ROM_INT(ESP_SLEEP_WAKEUP_EXT0) },
++    #if CONFIG_IDF_TARGET_ESP32C3
++    { MP_ROM_QSTR(MP_QSTR_EXT1_WAKE), MP_ROM_INT(ESP_SLEEP_WAKEUP_GPIO) },
++    #else
+     { MP_ROM_QSTR(MP_QSTR_EXT1_WAKE), MP_ROM_INT(ESP_SLEEP_WAKEUP_EXT1) },
++    #endif
+     { MP_ROM_QSTR(MP_QSTR_TIMER_WAKE), MP_ROM_INT(ESP_SLEEP_WAKEUP_TIMER) },
+     { MP_ROM_QSTR(MP_QSTR_TOUCHPAD_WAKE), MP_ROM_INT(ESP_SLEEP_WAKEUP_TOUCHPAD) },
+     { MP_ROM_QSTR(MP_QSTR_ULP_WAKE), MP_ROM_INT(ESP_SLEEP_WAKEUP_ULP) },
+-- 
+2.25.1
+
+
+From 741129355bd32d01929d7b400bbafbffed638e44 Mon Sep 17 00:00:00 2001
+From: "OSi (Ondrej Sienczak)" <ondrej.sienczak@seznam.cz>
+Date: Wed, 12 Oct 2022 17:02:44 +0200
+Subject: [PATCH 3/5] modmachine, modesp32: Fixed wake-up RTC pins chck.
+
+There have been incorrect test of used EXT1 (GPIO) wake-up capable
+(RTC) pins for ESP32-C3.
+
+Signed-off-by: Ondrej Sienczak <ondrej.sienczak@gmail.com>
+---
+ ports/esp32/modesp32.h   | 13 +++++++++++++
+ ports/esp32/modmachine.c |  4 ----
+ 2 files changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/ports/esp32/modesp32.h b/ports/esp32/modesp32.h
+index a685b7b38..71cc29833 100644
+--- a/ports/esp32/modesp32.h
++++ b/ports/esp32/modesp32.h
+@@ -30,6 +30,19 @@
+     )
+     #define RTC_LAST_EXT_PIN 21
+ 
++#elif CONFIG_IDF_TARGET_ESP32C3
++
++    #define RTC_VALID_EXT_PINS \
++    ( \
++    (1ll << 0) | \
++    (1ll << 1) | \
++    (1ll << 2) | \
++    (1ll << 3) | \
++    (1ll << 4) | \
++    (1ll << 5)   \
++    )
++    #define RTC_LAST_EXT_PIN 5
++
+ #else
+ 
+     #define RTC_VALID_EXT_PINS \
+diff --git a/ports/esp32/modmachine.c b/ports/esp32/modmachine.c
+index 83775f29d..b118e798e 100644
+--- a/ports/esp32/modmachine.c
++++ b/ports/esp32/modmachine.c
+@@ -139,11 +139,7 @@ STATIC mp_obj_t machine_sleep_helper(wake_type_t wake_type, size_t n_args, const
+     if (machine_rtc_config.ext1_pins != 0) {
+         for (int i = 0; i < GPIO_NUM_MAX; ++i) {
+             uint64_t bm = 1ULL << i;
+-
+             if (machine_rtc_config.ext1_pins & bm) {
+-                if (!esp_sleep_is_valid_wakeup_gpio((gpio_num_t)i)) {
+-                    mp_raise_ValueError(MP_ERROR_TEXT("invalid wake-up port"));
+-                }
+                 gpio_sleep_set_direction((gpio_num_t)i, GPIO_MODE_INPUT);
+             }
+         }
+-- 
+2.25.1
+
+
+From 4c7c2b090d8ea4c2db59bfe70d44bf4bd92370c0 Mon Sep 17 00:00:00 2001
+From: "OSi (Ondrej Sienczak)" <ondrej.sienczak@seznam.cz>
+Date: Wed, 12 Oct 2022 22:43:17 +0200
+Subject: [PATCH 4/5] modmachine, modesp32: Fixed deep/light sleep.
+
+With ESP32-C3 there is different approach for setting wake-up pins.
+
+Signed-off-by: Ondrej Sienczak <ondrej.sienczak@gmail.com>
+---
+ ports/esp32/modesp32.c   |  8 ++++++++
+ ports/esp32/modesp32.h   | 15 +--------------
+ ports/esp32/modmachine.c | 22 +++++++++++++++++-----
+ 3 files changed, 26 insertions(+), 19 deletions(-)
+
+diff --git a/ports/esp32/modesp32.c b/ports/esp32/modesp32.c
+index 017db36e2..9edbd17fa 100644
+--- a/ports/esp32/modesp32.c
++++ b/ports/esp32/modesp32.c
+@@ -65,6 +65,12 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(esp32_wake_on_touch_obj, esp32_wake_on_touch);
+ 
+ STATIC mp_obj_t esp32_wake_on_ext0(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+ 
++    #if CONFIG_IDF_TARGET_ESP32C3
++
++    mp_raise_ValueError(MP_ERROR_TEXT("not supported"));
++
++    #else
++
+     if (machine_rtc_config.wake_on_touch) {
+         mp_raise_ValueError(MP_ERROR_TEXT("no resources"));
+     }
+@@ -91,6 +97,8 @@ STATIC mp_obj_t esp32_wake_on_ext0(size_t n_args, const mp_obj_t *pos_args, mp_m
+     machine_rtc_config.ext0_level = args[ARG_level].u_bool;
+     machine_rtc_config.ext0_wake_types = MACHINE_WAKE_SLEEP | MACHINE_WAKE_DEEPSLEEP;
+ 
++    #endif
++
+     return mp_const_none;
+ }
+ STATIC MP_DEFINE_CONST_FUN_OBJ_KW(esp32_wake_on_ext0_obj, 0, esp32_wake_on_ext0);
+diff --git a/ports/esp32/modesp32.h b/ports/esp32/modesp32.h
+index 71cc29833..7064f3ead 100644
+--- a/ports/esp32/modesp32.h
++++ b/ports/esp32/modesp32.h
+@@ -1,7 +1,7 @@
+ #ifndef MICROPY_INCLUDED_ESP32_MODESP32_H
+ #define MICROPY_INCLUDED_ESP32_MODESP32_H
+ 
+-#if CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
++#if CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3 || CONFIG_IDF_TARGET_ESP32C3
+ 
+     #define RTC_VALID_EXT_PINS \
+     ( \
+@@ -30,19 +30,6 @@
+     )
+     #define RTC_LAST_EXT_PIN 21
+ 
+-#elif CONFIG_IDF_TARGET_ESP32C3
+-
+-    #define RTC_VALID_EXT_PINS \
+-    ( \
+-    (1ll << 0) | \
+-    (1ll << 1) | \
+-    (1ll << 2) | \
+-    (1ll << 3) | \
+-    (1ll << 4) | \
+-    (1ll << 5)   \
+-    )
+-    #define RTC_LAST_EXT_PIN 5
+-
+ #else
+ 
+     #define RTC_VALID_EXT_PINS \
+diff --git a/ports/esp32/modmachine.c b/ports/esp32/modmachine.c
+index b118e798e..cf45a4a70 100644
+--- a/ports/esp32/modmachine.c
++++ b/ports/esp32/modmachine.c
+@@ -137,16 +137,28 @@ STATIC mp_obj_t machine_sleep_helper(wake_type_t wake_type, size_t n_args, const
+     #if CONFIG_IDF_TARGET_ESP32C3
+ 
+     if (machine_rtc_config.ext1_pins != 0) {
++        gpio_int_type_t intr_type = machine_rtc_config.ext1_level ? GPIO_INTR_HIGH_LEVEL : GPIO_INTR_LOW_LEVEL;
++
+         for (int i = 0; i < GPIO_NUM_MAX; ++i) {
++            gpio_num_t gpio = (gpio_num_t)i;
+             uint64_t bm = 1ULL << i;
++
+             if (machine_rtc_config.ext1_pins & bm) {
+-                gpio_sleep_set_direction((gpio_num_t)i, GPIO_MODE_INPUT);
++                gpio_sleep_set_direction(gpio, GPIO_MODE_INPUT);
++
++                if (MACHINE_WAKE_SLEEP == wake_type) {
++                    gpio_wakeup_enable(gpio, intr_type);
++                }
+             }
+         }
+-        esp_deep_sleep_enable_gpio_wakeup(
+-            machine_rtc_config.ext1_pins,
+-            machine_rtc_config.ext1_level ? ESP_GPIO_WAKEUP_GPIO_HIGH : ESP_GPIO_WAKEUP_GPIO_LOW);
+-        esp_sleep_enable_gpio_wakeup();
++
++        if (MACHINE_WAKE_DEEPSLEEP == wake_type) {
++            esp_deep_sleep_enable_gpio_wakeup(
++                machine_rtc_config.ext1_pins,
++                machine_rtc_config.ext1_level ? ESP_GPIO_WAKEUP_GPIO_HIGH : ESP_GPIO_WAKEUP_GPIO_LOW);
++        } else {
++            esp_sleep_enable_gpio_wakeup();
++        }
+     }
+ 
+     #else
+-- 
+2.25.1
+
+
+From 45f80abd619f6236983bf7613a20fc776b8276f9 Mon Sep 17 00:00:00 2001
+From: "OSi (Ondrej Sienczak)" <ondrej.sienczak@seznam.cz>
+Date: Thu, 13 Oct 2022 21:10:03 +0200
+Subject: [PATCH 5/5] modmachine: ESP32 deepsleep on RTC pins only.
+
+The light sleep on ESP32-C3 is allowed on all IO pins, however deepsleep
+on RTC pins only. This patch raises exception when deepsleep is invoked
+and non-RTC pins are used as wake-up sources.
+
+Signed-off-by: Ondrej Sienczak <ondrej.sienczak@gmail.com>
+---
+ ports/esp32/modmachine.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/ports/esp32/modmachine.c b/ports/esp32/modmachine.c
+index cf45a4a70..0b53ca9f5 100644
+--- a/ports/esp32/modmachine.c
++++ b/ports/esp32/modmachine.c
+@@ -153,9 +153,11 @@ STATIC mp_obj_t machine_sleep_helper(wake_type_t wake_type, size_t n_args, const
+         }
+ 
+         if (MACHINE_WAKE_DEEPSLEEP == wake_type) {
+-            esp_deep_sleep_enable_gpio_wakeup(
++            if (ESP_OK != esp_deep_sleep_enable_gpio_wakeup(
+                 machine_rtc_config.ext1_pins,
+-                machine_rtc_config.ext1_level ? ESP_GPIO_WAKEUP_GPIO_HIGH : ESP_GPIO_WAKEUP_GPIO_LOW);
++                machine_rtc_config.ext1_level ? ESP_GPIO_WAKEUP_GPIO_HIGH : ESP_GPIO_WAKEUP_GPIO_LOW)) {
++                mp_raise_ValueError(MP_ERROR_TEXT("wake-up pin not supported"));
++            }
+         } else {
+             esp_sleep_enable_gpio_wakeup();
+         }
+-- 
+2.25.1
+
