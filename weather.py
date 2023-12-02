@@ -30,8 +30,8 @@ class RainData:
     def rainfall_occurring(self):
         """Return True if the data indicated that rain has or will occur."""
         return (self.rain_today_mm > 3 or self.rain_last_hour_mm > 1
-                or self.rain_forecast_today_mm > 6
-                or self.rain_forecast_tomorrow_mm > 9)
+                or self.rain_forecast_today_mm > 10
+                or self.rain_forecast_tomorrow_mm > 10)
 
     def get_data(self):
         """Return rain data as a tuple."""
